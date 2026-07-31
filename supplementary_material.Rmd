@@ -1,0 +1,4925 @@
+---
+title: "Supplementary-material to: Testing the water: Importance of surface water resources for settlement installation in various climatic contexts toward a machine learning approach"
+author: "Mathias Bellat and Biel Soriano-Elias"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    self_contained: true
+bibliography: references.bib
+---
+# Preface {.unnumbered}
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![License: CC BY-SA 4.0](https://img.shields.io/badge/License-CC_BY--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-sa/4.0/) 
+
+This is a complete description of the workflow related to the paper *Testing the water: Importance of surface water resources for settlement installation in various climatic contexts toward a machine learning approach"*. It contains all the pre-processing steps of the subsequent stages and the data required to understand the entire process.
+
+<img src="images/Workflow.png" align="center" width="100%" height="100%"/>
+
+**Authors:**
+
+-   Mathias Bellat, Department of Geosciences, Working group of Soil Science and Geomorphology, University of Tübingen, 72070 Tübingen, Germany, [mathias.archaeology@gmail.com](mailto:mathias.archaeology@gmail.com){.email}.
+-   Biel Soriano-Elias, Prehistory department, SAPPO-GRAMPO, Autonomous University of Barcelona, -104, Mòdul de Recerca A, Parc de Recerca de la UAB, 08193 Bellaterra, Barcelona, Spain,[bielsoel28@gmail.com](mailto:bielsoel28@gmail.com){.email}.
+
+---
+bibliography: references.bib
+---
+
+# Data structure
+
+Data are extracted from remote sensing imagery or archaeological site collection [@pfalzner_first_2015, @palmisano_regional_2018, @schmid-merkl_sites_2022, @titolo_villages_2025]. A complete table of all resources used during the computation, `Data.csv`, is available in the `analysis/data` folder.
+s
+## Folders organisation
+
+While the used data are contained in the `raw_data` folder (input/covariates) for each step, the products are included in the `derived_data` (output). The folder is available at the [OSF](https://doi.org/10.17605/OSF.IO/CTW2U) deposit. Some of the data are not available online but are available only to the reviewer on personal request (c.f. data table).
+
+## Datable description
+
+We provide here a description of the data table below:
+
+-   `Name`: The name of the file.
+-   `Date`: Date of last modification of the file.
+-   `Type`: Type of data, there are **8** types (**AOI**, **Code**, **Inputs**, **Metrics**, **Results**, **Map**, **Covariate**, **Reports**, and **Statistics**)
+-   `Author.s`: Author.s who produced the original file. In the case of modified product (*e.g.* slope from DEM) the author.s of the modified file are quoted.
+-   `Format`: Format of the file.
+-   `Produced in`: In which part of the process, or on which DOI/link, the data have been produced or accessed.
+-   `Used in`: In which part of the project were the data used? Several uses are possible.
+-   `Localisation`: The folder where the file is located.
+-   `Units`: Unit of the data, if applicable.
+-   `Resolution (m)`: Resolution of the date in meters if it exists (or the map resolution).
+-   `Access`: Three levels of accessibility:
+    -   🟢 `Fully-accessible` Freely accessible on the deposit.
+    -   🟠 `Accessible` Freely accessible but need to be download *via* a link (provided in supplementary material) or the `GEE_script.txt` or `API_code.R` code file.
+    -   🔴 `Restricted` Only for the reviewers can access this data.
+-   `Copyright`: The copyright that rules the data.
+-   `Description`: A short description of the data.
+
+```{r data table import, echo = FALSE, include = FALSE}
+library(readr)
+Data <- read_csv("../data/data.csv")
+```
+
+```{r data table, echo = FALSE, warning=FALSE, message=FALSE}
+library(DT)
+library(dplyr)
+library(kableExtra)
+Data$Access <- dplyr::case_when(
+  Data$Access == "Fully-accessible" ~ "🟢 Fully-accessible",
+  Data$Access == "Accessible" ~ "🟠 Accessible",
+  Data$Access == "Restricted" ~ "🔴 Restricted",
+  TRUE ~ Data$Access
+)
+datatable(Data, options = list(scrollX = TRUE, autoWidth = TRUE, pageLength = 10), class = 'compact',
+  width = '100%')
+```
+
+
+# Sites filtering {#sites-filter}
+
+```{r setup sites-filter, echo=FALSE, warning=FALSE, message=FALSE}
+library(pacman)
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
+pacman::p_load(sf, mapview, readr)
+```
+
+```{r site-filter setup, eval = FALSE}
+# 0 Environment setup ##########################################################
+
+# 0.1 Prepare environment ======================================================
+
+# Folder check
+getwd()
+
+# Set folder direction
+
+# Clean up workspace
+rm(list=setdiff(ls()))
+
+# 0.2 Install packages =========================================================
+
+install.packages("pacman")        
+#Install and load the "pacman" package (allow easier download of packages)
+library(pacman)
+pacman::p_load(sf, mapview, readr, terra)
+
+# 0.3 Show session infos =======================================================
+
+sessionInfo()
+```
+
+
+```
+R version 4.6.0 (2026-04-24)
+Platform: x86_64-pc-linux-gnu
+Running under: EndeavourOS
+
+Matrix products: default
+BLAS:   /usr/lib/libblas.so.3.12.0 
+LAPACK: /usr/lib/liblapack.so.3.12.0  LAPACK version 3.12.0
+
+locale:
+ [1] LC_CTYPE=fr_FR.UTF-8       LC_NUMERIC=C               LC_TIME=fr_FR.UTF-8        LC_COLLATE=fr_FR.UTF-8     LC_MONETARY=fr_FR.UTF-8   
+ [6] LC_MESSAGES=fr_FR.UTF-8    LC_PAPER=fr_FR.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=fr_FR.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Europe/Paris
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+[1] terra_1.9-27   readr_2.2.0    mapview_2.11.4 sf_1.1-1      
+
+loaded via a namespace (and not attached):
+ [1] rappdirs_0.3.4     generics_0.1.4     class_7.3-23       KernSmooth_2.23-26 lattice_0.22-9     hms_1.1.4          digest_0.6.39      magrittr_2.0.5    
+ [9] RColorBrewer_1.1-3 grid_4.6.0         iterators_1.0.14   fastmap_1.2.0      foreach_1.5.2      e1071_1.7-17       DBI_1.3.0          purrr_1.2.2       
+[17] scales_1.4.0       crosstalk_1.2.2    codetools_0.2-20   cli_3.6.6          rlang_1.2.0        units_1.0-1        base64enc_0.1-6    otel_0.2.0        
+[25] tools_4.6.0        raster_3.6-32      tzdb_0.5.0         gargle_1.6.1       pacman_0.5.1       vctrs_0.7.3        R6_2.6.1           png_0.1-9         
+[33] stats4_4.6.0       proxy_0.4-29       lifecycle_1.0.5    classInt_0.4-11    leaflet_2.2.3      fs_2.1.0           htmlwidgets_1.6.4  pkgconfig_2.0.3   
+[41] pillar_1.11.1      glue_1.8.1         Rcpp_1.1.1-1.1     tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0  farver_2.1.2       htmltools_0.5.9   
+[49] leafem_0.2.5       satellite_1.0.6    compiler_4.6.0     sp_2.2-1
+```
+
+For the Kurdistan region the point are ploted with a 500m radius buffer in order to not reveal the exact location of the sites.
+
+```{r site-filter import csv, eval=FALSE}
+# 1 Prepare the data ###########################################################
+
+# 1.1 Import files =============================================================
+
+Rhine_Bronze <- read_delim("./analysis/raw_data/inputs/Rhine_Bronze.csv", delim = ";", escape_double = FALSE, trim_ws = TRUE)
+Rhine_Iron <- read_delim("./analysis/raw_data/inputs/Rhine_Iron.csv", delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+Lazio_Bronze <- read.csv("./analysis/raw_data/inputs/Lazio_Bronze.csv")
+Lazio_Iron <- read.csv("./analysis/raw_data/inputs/Lazio_Iron.csv")
+
+Shephelah_Bronze <- read_delim("./analysis/raw_data/inputs/Shephelah_Bronze.csv", delim = ",", escape_double = FALSE, trim_ws = TRUE)
+Shephelah_Iron <- read_delim("./analysis/raw_data/inputs/Shephelah_Iron.csv", delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+Kurdistan_Bronze <- read.csv("./analysis/raw_data/inputs/Kurdistan_Bronze.csv")
+Kurdistan_Iron <- read.csv("./analysis/raw_data/inputs/Kurdistan_Iron.csv")
+
+# 1.2 Filter the files =========================================================
+
+# For Rhine data
+data_df <- Rhine_Bronze[Rhine_Bronze$LATITUDE < 48.5,]
+data_df <- data_df[data_df$CARAC_NAME == "Immobilier",]
+data_df <- data_df[data_df$CARAC_LVL1 == "Habitat",]
+Rhine_Bronze_sf <- st_as_sf(data_df, coords = c("LONGITUDE", "LATITUDE"), crs = 4326) 
+
+data_df <- Rhine_Iron[Rhine_Iron$LATITUDE < 48.5,]
+data_df <- data_df[data_df$CARAC_NAME == "Immobilier",]
+data_df <- data_df[data_df$CARAC_LVL1 == "Habitat",]
+Rhine_Iron_sf <- st_as_sf(data_df, coords = c("LONGITUDE", "LATITUDE"), crs = 4326) 
+
+# For Lazio data
+Lazio_Bronze <- Lazio_Bronze[Lazio_Bronze$Longitude < 12.83,]
+Lazio_Bronze_sf <- st_as_sf(Lazio_Bronze, coords = c("Longitude", "Latitude"), crs = 4326)
+
+Lazio_Iron <- Lazio_Iron[Lazio_Iron$Longitude < 12.83,]
+Lazio_Iron_sf <- st_as_sf(Lazio_Iron, coords = c("Longitude", "Latitude"), crs = 4326) 
+
+# For Shephelah data
+Shephelah_Bronze_sf <- st_as_sf(Shephelah_Bronze, coords = c("Longitude", "Latitude"), crs = 4326)
+Shephelah_Iron <- Shephelah_Iron[Shephelah_Iron$Type == "Settlement",]
+Shephelah_Iron <- Shephelah_Iron[Shephelah_Iron$Period == "Iron Age II",]
+Shephelah_Iron <- Shephelah_Iron[grepl("Farm|hamlet|structure", Shephelah_Iron$Subtype, ignore.case = TRUE),]
+Shephelah_Iron_sf <- st_as_sf(Shephelah_Iron, coords = c("Longitude", "Latitude"), crs = 4326) 
+
+# For Kurdistan data
+Kurdistan_Bronze <- Kurdistan_Bronze[Kurdistan_Bronze$zone != "C",]
+Kurdistan_Bronze <- Kurdistan_Bronze[Kurdistan_Bronze$Latitude > 36.86,]
+
+Kurdistan_Iron <- Kurdistan_Iron[Kurdistan_Iron$zone != "C",]
+Kurdistan_Iron <- Kurdistan_Iron[Kurdistan_Iron$Latitude > 36.86,]
+
+Kurdistan_Bronze_sf <- st_as_sf(Kurdistan_Bronze, coords = c("Longitude", "Latitude"), crs = 4326)
+Kurdistan_Iron_sf <- st_as_sf(Kurdistan_Iron, coords = c("Longitude", "Latitude"), crs = 4326) 
+
+# 1.3 Plot data ================================================================
+
+mapview(Rhine_Bronze_sf, col.regions = "lightblue") + mapview(Rhine_Iron_sf, col.regions = "pink")
+
+mapview(Lazio_Bronze_sf, col.regions = "lightblue") + mapview(Lazio_Iron_sf, col.regions = "pink")
+
+mapview(Shephelah_Bronze_sf, col.regions = "lightblue") + mapview(Shephelah_Iron_sf, col.regions = "pink")
+
+mapview(Kurdistan_Bronze_sf, col.regions = "lightblue") + mapview(Kurdistan_Iron_sf, col.regions = "pink")
+```
+
+```{r site-filter import csv hide, echo=FALSE}
+
+# 1 Prepare the data ###########################################################
+
+# 1.1 Import files =============================================================
+
+Rhine_Bronze <- read_delim("../data/raw_data/inputs/Rhine_Bronze.csv", delim = ";", escape_double = FALSE, trim_ws = TRUE)
+Rhine_Iron <- read_delim("../data/raw_data/inputs/Rhine_Iron.csv", delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+Lazio_Bronze <- read.csv("../data/raw_data/inputs/Lazio_Bronze.csv")
+Lazio_Iron <- read.csv("../data/raw_data/inputs/Lazio_Iron.csv")
+
+Shephelah_Bronze <- read_delim("../data/raw_data/inputs/Shephelah_Bronze.csv", delim = ",", escape_double = FALSE, trim_ws = TRUE)
+Shephelah_Iron <- read_delim("../data/raw_data/inputs/Shephelah_Iron.csv", delim = ";", escape_double = FALSE, trim_ws = TRUE)
+
+Kurdistan_Bronze <- read.csv("../data/raw_data/inputs/Kurdistan_Bronze.csv")
+Kurdistan_Iron <- read.csv("../data/raw_data/inputs/Kurdistan_Iron.csv")
+
+# 1.2 Filter the files =========================================================
+
+# For Rhine data
+data_df <- Rhine_Bronze[Rhine_Bronze$LATITUDE < 48.5,]
+data_df <- data_df[data_df$CARAC_NAME == "Immobilier",]
+data_df <- data_df[data_df$CARAC_LVL1 == "Habitat",]
+Rhine_Bronze_sf <- st_as_sf(data_df, coords = c("LONGITUDE", "LATITUDE"), crs = 4326) 
+
+data_df <- Rhine_Iron[Rhine_Iron$LATITUDE < 48.5,]
+data_df <- data_df[data_df$CARAC_NAME == "Immobilier",]
+data_df <- data_df[data_df$CARAC_LVL1 == "Habitat",]
+Rhine_Iron_sf <- st_as_sf(data_df, coords = c("LONGITUDE", "LATITUDE"), crs = 4326) 
+
+# For Lazio data
+Lazio_Bronze <- Lazio_Bronze[Lazio_Bronze$Longitude < 12.83,]
+Lazio_Bronze_sf <- st_as_sf(Lazio_Bronze, coords = c("Longitude", "Latitude"), crs = 4326)
+
+Lazio_Iron <- Lazio_Iron[Lazio_Iron$Longitude < 12.83,]
+Lazio_Iron_sf <- st_as_sf(Lazio_Iron, coords = c("Longitude", "Latitude"), crs = 4326) 
+
+# For Shephelah data
+Shephelah_Bronze_sf <- st_as_sf(Shephelah_Bronze, coords = c("Longitude", "Latitude"), crs = 4326)
+Shephelah_Iron <- Shephelah_Iron[Shephelah_Iron$Type == "Settlement",]
+Shephelah_Iron <- Shephelah_Iron[Shephelah_Iron$Period == "Iron Age II",]
+Shephelah_Iron <- Shephelah_Iron[grepl("Farm|hamlet|structure", Shephelah_Iron$Subtype, ignore.case = TRUE),]
+Shephelah_Iron_sf <- st_as_sf(Shephelah_Iron, coords = c("Longitude", "Latitude"), crs = 4326) 
+
+# For Kurdistan data
+Kurdistan_Bronze <- Kurdistan_Bronze[Kurdistan_Bronze$zone != "C",]
+Kurdistan_Bronze <- Kurdistan_Bronze[Kurdistan_Bronze$Latitude > 36.86,]
+
+Kurdistan_Iron <- Kurdistan_Iron[Kurdistan_Iron$zone != "C",]
+Kurdistan_Iron <- Kurdistan_Iron[Kurdistan_Iron$Latitude > 36.86,]
+
+Kurdistan_Bronze_sf <- st_as_sf(Kurdistan_Bronze, coords = c("Longitude", "Latitude"), crs = 4326)
+Kurdistan_Iron_sf <- st_as_sf(Kurdistan_Iron, coords = c("Longitude", "Latitude"), crs = 4326) 
+
+Kurdistan_Bronze_buf <- Kurdistan_Bronze_sf |>
+  st_transform(3857) |>
+  st_buffer(500) |>        # 0.5 km buffer
+  st_transform(4326)
+
+Kurdistan_Iron_buf <- Kurdistan_Iron_sf |>
+  st_transform(3857) |>
+  st_buffer(500) |>
+  st_transform(4326)
+
+# 1.3 Plot data ================================================================
+
+mapview(Rhine_Bronze_sf, col.regions = "lightblue") + mapview(Rhine_Iron_sf, col.regions = "pink")
+
+mapview(Lazio_Bronze_sf, col.regions = "lightblue") + mapview(Lazio_Iron_sf, col.regions = "pink")
+
+mapview(Shephelah_Bronze_sf, col.regions = "lightblue") + mapview(Shephelah_Iron_sf, col.regions = "pink")
+
+mapview(Kurdistan_Bronze_buf, col.regions = "lightblue") + mapview(Kurdistan_Iron_buf, col.regions = "pink")
+```
+
+
+We are computing the reoccupation statistics based on each periods and areas sites number.
+
+```{r site-filter reoccup}
+# 2 Compute basic statistics ###################################################
+
+# 2.1 Reuse percent ============================================================
+
+reoccupation <- data.frame(Rhine = 0, Lazio = 0, Shephelah = 0, Kurdistan = 0)
+
+reoccupation[1,1] <- round(((length(intersect(Rhine_Iron_sf$SITE_SOURCE_ID, Rhine_Bronze_sf$SITE_SOURCE_ID)))/length(Rhine_Bronze_sf$SITE_SOURCE_ID))*100, digit = 2)
+reoccupation[1,2] <- round(((length(intersect(Lazio_Iron_sf$Id, Lazio_Bronze_sf$Id)))/length(Lazio_Bronze_sf$Id))*100, digit = 2)
+reoccupation[1,3] <- round(((length(intersect(Shephelah_Iron_sf$Name, Shephelah_Bronze_sf$Name)))/length(Shephelah_Bronze_sf$Name))*100, digit = 2)
+reoccupation[1,4] <- round(((length(intersect(Kurdistan_Iron_sf$Name, Kurdistan_Bronze_sf$Name)))/length(Kurdistan_Bronze_sf$Name))*100, digit = 2)
+
+reoccupation[2,1] <- round(((length(intersect(Rhine_Iron_sf$SITE_SOURCE_ID, Rhine_Bronze_sf$SITE_SOURCE_ID)))/length(Rhine_Iron_sf$SITE_SOURCE_ID))*100, digit = 2)
+reoccupation[2,2] <- round(((length(intersect(Lazio_Iron_sf$Id, Lazio_Bronze_sf$Id)))/length(Lazio_Iron_sf$Id))*100, digit = 2)
+reoccupation[2,3] <- round(((length(intersect(Shephelah_Iron_sf$Name, Shephelah_Bronze_sf$Name)))/length(Shephelah_Iron_sf$Name))*100, digit = 2)
+reoccupation[2,4] <- round(((length(intersect(Kurdistan_Iron_sf$Name, Kurdistan_Bronze_sf$Name)))/length(Kurdistan_Iron_sf$Name))*100, digit = 2)
+
+
+reoccupation
+# 2.2 Surface of the study area ================================================
+
+# For Rhine
+Rhine_Iron_sf$era <- "Iron"
+Rhine_Bronze_sf$era <- "Bronze"
+Rhine_all <- rbind(Rhine_Iron_sf, Rhine_Bronze_sf)
+Rhine_all <- st_transform(Rhine_all, 32632)
+bbox <- st_bbox(Rhine_all)
+bbox_sf <- st_as_sfc(bbox)
+Rhine_bbox <- st_buffer(bbox_sf, 1000)
+mapview(Rhine_bbox) + mapview(Rhine_all,  col.regions = "pink")
+
+# For Lazio
+Lazio_Iron_sf$era <- "Iron"
+Lazio_Bronze_sf$era <- "Bronze"
+Lazio_all <- rbind(Lazio_Iron_sf, Lazio_Bronze_sf)
+Lazio_all <- st_transform(Lazio_all, 32633)
+bbox <- st_bbox(Lazio_all)
+bbox_sf <- st_as_sfc(bbox)
+Lazio_bbox <- st_buffer(bbox_sf, 1000)
+mapview(Lazio_bbox) + mapview(Lazio_all,  col.regions = "pink")
+
+# For Shephelah
+Shephelah_Iron_sf$era <- "Iron"
+Shephelah_Bronze_sf$era <- "Bronze"
+Shephelah_all <- rbind(Shephelah_Iron_sf, Shephelah_Bronze_sf)
+Shephelah_all <- st_transform(Shephelah_all, 32636)
+bbox <- st_bbox(Shephelah_all)
+bbox_sf <- st_as_sfc(bbox)
+Shephelah_bbox <- st_buffer(bbox_sf, 1000)
+mapview(Shephelah_bbox) + mapview(Shephelah_all,  col.regions = "pink")
+
+# For Kurdistan
+Kurdistan_Iron_sf$era <- "Iron"
+Kurdistan_Bronze_sf$era <- "Bronze"
+Kurdistan_all <- rbind(Kurdistan_Iron_buf, Kurdistan_Bronze_buf)
+Kurdistan_all <- st_transform(Kurdistan_all, 32638)
+bbox <- st_bbox(Kurdistan_all)
+bbox_sf <- st_as_sfc(bbox)
+Kurdistan_bbox <- st_buffer(bbox_sf, 1000)
+mapview(Kurdistan_bbox) + mapview(Kurdistan_all,  col.regions = "pink")
+
+surface <- data.frame(Rhine = 0, Lazio = 0, Shephelah = 0, Kurdistan = 0)
+
+surface[1,1] <- round(sum(st_area(Rhine_bbox))/1000000, digit = 2)
+surface[1,2] <- round(sum(st_area(Lazio_bbox))/1000000, digit = 2)
+surface[1,3] <- round(sum(st_area(Shephelah_bbox))/1000000, digit = 2)
+surface[1,4] <- round(sum(st_area(Kurdistan_bbox))/1000000, digit = 2)
+
+surface[2,1] <- nrow(Rhine_Bronze_sf)
+surface[2,2] <- nrow(Lazio_Bronze_sf)
+surface[2,3] <- nrow(Shephelah_Bronze_sf)
+surface[2,4] <- nrow(Kurdistan_Bronze_sf)
+
+surface[3,1] <- round(nrow(Rhine_all[Rhine_all$era == "Bronze",])/(sum(st_area(Rhine_bbox))/1000000), digit = 2)
+surface[3,2] <- round(nrow(Lazio_all[Lazio_all$era == "Bronze",])/(sum(st_area(Lazio_bbox))/1000000), digit = 2)
+surface[3,3] <- round(nrow(Shephelah_all[Shephelah_all$era == "Bronze",])/(sum(st_area(Shephelah_bbox))/1000000), digit = 2)
+surface[3,4] <- round(nrow(Kurdistan_all[Kurdistan_all$era == "Bronze",])/(sum(st_area(Kurdistan_bbox))/1000000), digit = 2)
+
+surface[4,1] <- nrow(Rhine_Iron_sf)
+surface[4,2] <- nrow(Lazio_Iron_sf)
+surface[4,3] <- nrow(Shephelah_Iron_sf)
+surface[4,4] <- nrow(Kurdistan_Iron_sf)
+
+surface[5,1] <- round(nrow(Rhine_all[Rhine_all$era == "Iron",])/(sum(st_area(Rhine_bbox))/1000000), digit = 2)
+surface[5,2] <- round(nrow(Lazio_all[Lazio_all$era == "Iron",])/(sum(st_area(Lazio_bbox))/1000000), digit = 2)
+surface[5,3] <- round(nrow(Shephelah_all[Shephelah_all$era == "Iron",])/(sum(st_area(Shephelah_bbox))/1000000), digit = 2)
+surface[5,4] <- round(nrow(Kurdistan_all[Kurdistan_all$era == "Iron",])/(sum(st_area(Kurdistan_bbox))/1000000), digit = 2)
+
+surface[6,1] <- nrow(Rhine_all) - length(intersect(Rhine_Iron_sf$SITE_SOURCE_ID, Rhine_Bronze_sf$SITE_SOURCE_ID))
+surface[6,2] <- nrow(Lazio_all) - length(intersect(Lazio_Iron_sf$Id, Lazio_Bronze_sf$Id))
+surface[6,3] <- nrow(Shephelah_all) - length(intersect(Shephelah_Iron_sf$Name, Shephelah_Bronze_sf$Name))
+surface[6,4] <- nrow(Kurdistan_all) - length(intersect(Kurdistan_Iron_sf$Name, Kurdistan_Bronze_sf$Name))
+
+surface[7,1] <- round(surface[6,1]/(sum(st_area(Rhine_bbox))/1000000), digit = 2)
+surface[7,2] <- round(surface[6,2]/(sum(st_area(Lazio_bbox))/1000000), digit = 2)
+surface[7,3] <- round(surface[6,3]/(sum(st_area(Shephelah_bbox))/1000000), digit = 2)
+surface[7,4] <- round(surface[6,4]/(sum(st_area(Kurdistan_bbox))/1000000), digit = 2)
+
+row.names(surface) <- c("Surface of the AOI", "BA sites", "BA sites density (km2)", "IA sites", "IA sites density (km2)", "Total sites", "Total sites density (km2)")
+surface
+```
+
+
+Once computed we are exporting the bounding box of each study area
+
+```{r site-filter bbox, eval=FALSE}
+# 2.3 Export AOI ===============================================================
+
+bbox_sf <- st_as_sfc(st_bbox(Rhine_bbox))
+bbox_sf <- st_transform(bbox_sf, 4326)
+bbox_vect <- vect(bbox_sf)
+r <- rast(ext(bbox_vect), resolution = 50, crs = st_crs(bbox_sf)$wkt)
+values(r) <- 1
+writeRaster(r, file = "./analysis/raw_data/grid/Rhine_AOI.tif", overwrite = TRUE)
+
+bbox_sf <- st_as_sfc(st_bbox(Lazio_bbox))
+bbox_sf <- st_transform(bbox_sf, 4326)
+bbox_vect <- vect(bbox_sf)
+r <- rast(ext(bbox_vect), resolution = 50, crs = st_crs(bbox_sf)$wkt)
+values(r) <- 1
+writeRaster(r, file = "./analysis/raw_data/grid/Lazio_AOI.tif", overwrite = TRUE)
+
+bbox_sf <- st_as_sfc(st_bbox(Shephelah_bbox))
+bbox_sf <- st_transform(bbox_sf, 4326)
+bbox_vect <- vect(bbox_sf)
+r <- rast(ext(bbox_vect), resolution = 50, crs = st_crs(bbox_sf)$wkt)
+values(r) <- 1
+writeRaster(r, file = "./analysis/raw_data/grid/Shephelah_AOI.tif", overwrite = TRUE)
+
+bbox_sf <- st_as_sfc(st_bbox(Kurdistan_bbox))
+bbox_sf <- st_transform(bbox_sf, 4326)
+bbox_vect <- vect(bbox_sf)
+r <- rast(ext(bbox_vect), resolution = 50, crs = st_crs(bbox_sf)$wkt)
+values(r) <- 1
+writeRaster(r, file = "./analysis/raw_data/grid/Kurdistan_AOI.tif", overwrite = TRUE)
+
+save(Rhine_all, Lazio_all, Shephelah_all, Kurdistan_all, file = "./analysis/derived_data/save/Sites_filter.RData")
+```
+
+
+# Data selection, vectorisation and resizing
+
+This script ensures the downloading and resampling of each layer to the correct CRS at 30 x 30 m pixel size.
+
+## Google Earth Engine {#GEE-data}
+
+We used [Google Earth Engine](https://earthengine.google.com/), to collect the NDVI and NDWI from the *Sentinel 2* [@esa_sentinel-2_2022], the *Global-ET0_v3_monthly* layers for potential evapotranspiration [@zomer_global_2022] and the *GLO DEM 30* [@esa_copernicus_2022]. Code can be accessed at <https://code.earthengine.google.com/727f91b002132f46a6e7a6069b54dee4> or is defined below.
+
+```
+// JavaScript code to be implemented in Google Earth Engine(c) developed by M. Bellat to
+// accompany the paper: 
+
+// Bellat, M. and Soriano-Elias, B. 2026. 'Testing the water: Importance of surface water resources for settlement installation in 
+//  various climatic contexts toward a machine learning approach'
+// submitted to Quaternary Environements and Humans.
+
+// and the collection of data: https://doi.org/10.17605/OSF.IO/CTW2U
+//
+//                ------------- ooo -------------
+
+// TO EXECUTE THE ALGORITHM PASTE THIS CODE INTO GOOGLE EARTH ENGINE CODE EDITOR AND PRESS 'Run'
+
+//                ------------- ooo -------------
+
+// For more information on how this code works and how to apply it refer to the text of the article and
+// the supplementary material on https://doi.org/10.17605/OSF.IO/CTW2U
+// Suggestions and code improvements are welcome. Please, contact M. Bellat at mathias.archaeology@gmail.com
+
+////////////////////////////////////////////////////////////////////////////
+//                ------------- ooo -------------
+////////////////////////////////////////////////////////////////////////////
+//
+// You have to replace the name of the study area by the corresponding name (Rhine; Lazio; Shephelah; Kurdistan)
+//
+//                ------------- ooo -------------
+
+// Import the AOI of each area, you have to change the name of the area each time
+var raster = ee.Image('projects/ee-mathiasbellat/assets/Rhine_AOI');
+
+// Read the first band and mask the rest
+var band = raster.select(0);
+var mask = band.gt(0);
+var maskedBand = band.updateMask(mask).toInt();
+
+// Vectorised the raster extend
+var vectors = maskedBand.reduceToVectors({
+  geometry: raster.geometry(),
+  crs: raster.projection(),
+  scale: raster.projection().nominalScale(),
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'value',
+  maxPixels: 1e10
+});
+
+var aoi = vectors.geometry().dissolve({maxError: 1});
+
+// Show the studied area
+Map.centerObject(aoi, 8);
+Map.addLayer(aoi, {color: 'blue'}, 'AOI');
+print('AOI:', aoi);
+
+// Compute the Sentinel-2 cloud mask function and NDVI and NDWI indices
+
+// Cloud mask
+function maskS2clouds(image) {
+  var qa = image.select('QA60');
+  var cloudBitMask = 1 << 10;
+  var cirrusBitMask = 1 << 11;
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+               .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
+  return image.updateMask(mask).divide(10000);
+}
+
+// Sentinel-2 collection
+var dataset = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filterDate('2022-01-01', '2025-01-31')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) // Cloud percentage below 20%
+  .map(maskS2clouds);
+
+// Median composition
+var composite = dataset.median().clip(aoi);
+
+// Indices
+var ndwi = composite.normalizedDifference(['B3', 'B8']).rename('NDWI');
+
+var lswi1 = composite.normalizedDifference(['B3', 'B11']).rename('LSWI_1');
+
+var lswi2 = composite.normalizedDifference(['B3', 'B12']).rename('LSWI_2');
+
+var tctw = composite.expression(
+  '0.2578 * BLUE + 0.2305 * GREEN + 0.0883 * RED + 0.1071 * NIR - 0.7611 * SWIR1 - 0.5308 * SWIR2',
+  {
+    'BLUE':  composite.select('B2'),
+    'GREEN': composite.select('B3'),
+    'RED':   composite.select('B4'),
+    'NIR':   composite.select('B8'),
+    'SWIR1': composite.select('B11'),
+    'SWIR2': composite.select('B12')
+  }
+).rename('TCTW');
+```
+For the *Sentinel 2* bands, we use the cloud mask to obtain images with less than 20% cloud cover. We used the median from 2021 to 2025 for Green (B3),and NIR (B8) bands to compute NDWI [@mcfeeters_use_1996].
+
+$$ NDWI = \frac{Green - NIR}{Green + NIR} $$
+
+We used the median from 2021 to 2025 for NIR (B8),and SWIR1 (B11) bands to compute LSWI_1640 [@gao_ndwinormalized_1996, @chandrasekar_land_2010].
+
+$$ LSWI_{1640} = \frac{NIR - SWIR1}{NIR + SWIR1} $$
+
+We used the median from 2021 to 2025 for NIR (B8),and SWIR2 (B12) bands to compute LSWI_2130 [@gao_ndwinormalized_1996, @chandrasekar_land_2010].
+
+$$ LSWI_{2130} = \frac{NIR - SWIR2}{NIR + SWIR2} $$
+
+We used the median from 2021 to 2025 for Blue (B2), Green (B3), Red (B4), Nir (B8), SWIR1 (B11), and SWIR2 (B12) bands to compute TCTW [@shi_derivation_2019].
+
+$$ TCTW = 0.2578 \times Blue + 0.2305 \times Green + 0.0883 \times Red + 0.1071 \times NIR - 0.7611 \times SWIR1 - 0.5308 \times SWIR2 $$
+
+```
+// Compute the Aridity using the Global Aridity and PET Database
+
+// Aridity Index
+var ai = ee.Image('projects/sat-io/open-datasets/global_ai/global_ai_yearly').clip(aoi);
+var aridity = ai.select('b1').multiply(0.0001);
+
+// Min/max
+var stats = aridity.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: aoi,
+  scale: 1000,
+  bestEffort: true
+});
+
+var minValue = stats.get('b1_min').getInfo();
+var maxValue = stats.get('b1_max').getInfo();
+
+print('Min:', minValue, 'Max:', maxValue);
+
+// DEM
+var dem = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+  .select('DEM')
+  .mosaic()
+  .clip(aoi);
+  
+// Export the data to GoogleDrive
+
+// DEM
+Export.image.toDrive({
+  image: dem,
+  description: 'DEM',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_DEM_raw',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// Aridity
+Export.image.toDrive({
+  image: aridity,
+  description: 'Aridity',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_aridity_raw',
+  scale: 800,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// NDWI
+Export.image.toDrive({
+  image: ndwi,
+  description: 'NDWI',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_NDWI',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// LSWI_1 (B3/B11)
+Export.image.toDrive({
+  image: lswi1,
+  description: 'LSWI_1',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_LSWI_1613',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// LSWI_2 (B3/B12)
+Export.image.toDrive({
+  image: lswi2,
+  description: 'LSWI_2',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_LSWI_2202',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// TCTW
+Export.image.toDrive({
+  image: tctw,
+  description: 'TCTW',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_TCTW',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// Colours paramters
+var ndwiVis    = {min: -1,         max: 1,          palette: ['brown', 'white', 'blue']};
+var demVis     = {min: 0,          max: 4000,        palette: ['blue', 'green', 'brown', 'white']};
+var aridityVis = {min: minValue,   max: maxValue,    palette: ['yellow', 'green', 'darkgreen']};
+
+Map.centerObject(aoi, 9);
+
+// Add maps
+Map.addLayer(composite.select(['B4', 'B3', 'B2']), {min: 0, max: 0.3}, 'Sentinel 2 Median');
+Map.addLayer(ndwi,     ndwiVis,    'NDWI');
+Map.addLayer(lswi1,    ndwiVis,    'LSWI 1');
+Map.addLayer(lswi2,    ndwiVis,    'LSWI 2');
+Map.addLayer(tctw,     ndwiVis,    'TCTW');
+Map.addLayer(dem,      demVis,     'DEM GLO30');
+Map.addLayer(aridity,  aridityVis, 'Aridity');
+```
+
+
+## Covariates API
+
+```{r setup API, echo=FALSE, warning=FALSE, message=FALSE}
+library(pacman)
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
+```
+
+```{r env API, eval= FALSE}
+# 0 Environment setup ##########################################################
+
+# 0.1 Prepare environment ======================================================
+
+# Folder check
+getwd()
+
+# Set folder direction
+setwd()
+
+# Clean up workspace
+rm(list = ls(all.names = TRUE))
+
+# 0.2 Install packages =========================================================
+
+install.packages("pacman")        #Install and load the "pacman" package (allow easier download of packages)
+library(pacman)
+pacman::p_load(pastclim, terra, sf, httr, googledrive, geodata, cli, leastcostpath, dplyr) # Specify required packages and download it if needed
+
+# 0.3 Show session infos =======================================================
+
+sessionInfo()
+```
+
+```
+R version 4.6.0 (2026-04-24)
+Platform: x86_64-pc-linux-gnu
+Running under: EndeavourOS
+
+Matrix products: default
+BLAS:   /usr/lib/libblas.so.3.12.0 
+LAPACK: /usr/lib/liblapack.so.3.12.0  LAPACK version 3.12.0
+
+locale:
+ [1] LC_CTYPE=fr_FR.UTF-8       LC_NUMERIC=C               LC_TIME=fr_FR.UTF-8        LC_COLLATE=fr_FR.UTF-8     LC_MONETARY=fr_FR.UTF-8   
+ [6] LC_MESSAGES=fr_FR.UTF-8    LC_PAPER=fr_FR.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=fr_FR.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Europe/Paris
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+[1] dplyr_1.2.1          leastcostpath_2.0.13 cli_3.6.6            geodata_0.6-9        googledrive_2.1.2    httr_1.4.8           sf_1.1-1            
+[8] pastclim_2.2.0       terra_1.9-27        
+
+loaded via a namespace (and not attached):
+ [1] compiler_4.6.0     tidyselect_1.2.1   Rcpp_1.1.1-1.1     R6_2.6.1           generics_0.1.4     classInt_0.4-11    iterators_1.0.14   tibble_3.3.1      
+ [9] units_1.0-1        DBI_1.3.0          pillar_1.11.1      rlang_1.2.0        fs_2.1.0           otel_0.2.0         magrittr_2.0.5     class_7.3-23      
+[17] foreach_1.5.2      grid_4.6.0         rstudioapi_0.18.0  rappdirs_0.3.4     lifecycle_1.0.5    vctrs_0.7.3        KernSmooth_2.23-26 proxy_0.4-29      
+[25] gargle_1.6.1       glue_1.8.1         codetools_0.2-20   e1071_1.7-17       pacman_0.5.1       purrr_1.2.2        tools_4.6.0        pkgconfig_2.0.3   
+```
+
+We chose *CHELSA-TraCE21k* [@karger_chelsa-trace21k_2023] for its fine resolution in time (100-year slices) and in space (1 km). We used the `pastclim` package [@leonardi_pastclim_2023] to download and compute the time steps for the *CHELSA trace 21k* data at a 0.5-minute scale, from version *1.0*. We first selected the time slice for past periods,  and extracted a set of five variables related to water ("bio01", "bio03", "bio12", "bio15", "bio16"), then rescaled them for the AOI.
+
+
+
+```{r Inputs grid API, eval = FALSE}
+# 01 Import data sets ##########################################################
+
+# 01.1 Prepare all data format  ================================================
+
+eras <- c("BA", "IA")
+areas <- c("Rhine", "Lazio", "Shephelah", "Kurdistan")
+dir.create("./analysis/data/raw_data/covariates_raw/CHELSA_PAST")
+
+set_data_path(path_to_nc = "./analysis/data/raw_data/covariates_raw/CHELSA_PAST")
+download_dataset(dataset = "CHELSA_trace21k_1.0_0.5m_vsi")
+
+for (period in eras) {
+  dir.create(paste0("./analysis/data/raw_data/covariates_raw/CHELSA_PAST/",period))
+}
+
+time_period <- list(Rhine = list(BA = c(-4100, -2800), IA = c(-2200, -2000)),      # Bronze  (2200 - 800) and la Tène C and D (260 - 26)
+                    Lazio = list(BA = c(-4200, -3000), IA = c(-2900, -2600)),     # Bronze  (2300 - 1000) and Iron (1000 - 600)
+                    Shephelah = list(BA = c(-4900, -4500), IA = c(-2800, -2500)),    # Bronze  (3000 - 2500) and Iron (900 - 500)
+                    Kurdistan = list(BA = c(-4900, -4600), IA = c(-2800, -2300)) # Bronze  (3000 - 2600) and Iron (900 - 300)
+)
+
+projections <- list(Rhine = "EPSG:32632", Lazio = "EPSG:32633", Shephelah = "EPSG:32636", Kurdistan = "EPSG:32638")
+
+# 01.2 Download the past CHELSA  ===============================================
+
+# Get vars
+get_vars_for_dataset(dataset = "CHELSA_trace21k_1.0_0.5m_vsi")
+bio_variables <- c("bio01", "bio03", "bio12", "bio15", "bio16")
+
+# 02 Download and compute past Climate CHELSA ##################################
+# Two are need as the reprojection of the CHELSA with a smaller extend exclude 
+# a part of the layers
+
+for (area in areas) {
+  grid <- rast(paste0("./analysis/data/raw_data/grid/",area,"_AOI.tif"))
+  crs(grid) <- "EPSG:4326"
+  ext_large <- ext(
+    xmin(grid) - 0.5,
+    xmax(grid) + 0.5,
+    ymin(grid) - 0.5,
+    ymax(grid) + 0.5
+  )
+  
+  grid_large <- extend(grid, ext_large)
+
+  for (variable in bio_variables) {
+    cli_text("Running {.val {variable}} : ({length(bio_variables)} layers)")
+    cli_progress_bar(
+      format = "Running CHELSA {.val {period}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+      total = 2, clear = FALSE)
+    for (period in eras) {
+      x <- region_series(
+        time_bp = list(min = min(time_period[[area]][[period]]), max = max(time_period[[area]][[period]])),
+        bio_variables = variable,
+        dataset = "CHELSA_trace21k_1.0_0.5m_vsi"
+      )
+      x <- crop(x, grid_large)
+      x <- rast(x)
+      x <- mean(x, na.rm = TRUE)
+      writeRaster(x, paste0("./analysis/data/raw_data/covariates_raw/CHELSA_PAST/",period, "/",area, "_", variable, ".tif" ), overwrite=T)
+      cli_progress_update()
+    }
+    cli_progress_done()
+    cat("\n")
+  }
+}
+
+```
+
+
+```{r API DTM, eval = FALSE}
+# 03 DTM derived covariates ####################################################
+
+# 03.1 Export the DEM from Google Drive ========================================
+
+drive_auth()
+files <- drive_ls()
+for (area in areas) {
+  
+  # Import DEM
+  file <- files[files$name == paste0(area, "_DEM_raw.tif"),]
+  drive_download(
+    as_id(file$id),
+    path = paste0("./analysis/data/raw_data/covariates_raw/",area, "_DEM_raw.tif"), 
+    overwrite = TRUE
+  )
+}
+
+# 03.2 Import list of DEMs =====================================================
+
+# Define your folder path
+folder_path <- "analysis/data/raw_data/covariates_raw"
+
+# List all .tif files in that folder ending with "_DEM_raw.tif"
+dtm_list <- list.files(path = folder_path, 
+                       pattern = "_DEM_raw\\.tif$", 
+                       full.names = TRUE)
+#Prepare the names
+base_name <- sub("_DEM_raw\\.tif$", "", basename(dtm_list))
+
+# 03.3 Slope  ==================================================================
+
+for (f in 1:length(dtm_list)) {
+  
+  # Load the raster
+  r <- rast(dtm_list[[f]])
+  
+  # Compute slope in degrees
+  slope <- terrain(r, v = "slope", unit = "degrees")
+  
+  # Create output filename based on original
+  out_name <- file.path(folder_path, paste0(base_name[f], "_slope_deg.tif"))
+  
+  # Save to file
+  writeRaster(slope, out_name, overwrite = TRUE)
+  
+}
+
+# 03.4 MSRM  ====================================================================
+
+#Function to select planar crs for correct msrm computation
+ensure_planar_crs <- function(rast_obj) {
+  # 1️⃣ Check CRS
+  if (is.na(crs(rast_obj))) {
+    stop("Input raster has no CRS defined!")
+  }
+  
+  # 2️⃣ Check if CRS is geographic (lon/lat)
+  if (is.lonlat(rast_obj)) {
+    # Get centroid of raster extent
+    ext <- ext(rast_obj)
+    centroid_x <- (ext[1] + ext[2]) / 2
+    centroid_y <- (ext[3] + ext[4]) / 2
+    
+    # Determine UTM zone based on longitude
+    utm_zone <- floor((centroid_x + 180) / 6) + 1
+    
+    # Use appropriate hemisphere EPSG
+    if (centroid_y >= 0) {
+      epsg <- 32600 + utm_zone  # Northern Hemisphere
+    } else {
+      epsg <- 32700 + utm_zone  # Southern Hemisphere
+    }
+    
+    message("Geographic CRS detected. Reprojecting to planar CRS EPSG:", epsg)
+    rast_obj <- project(rast_obj, paste0("EPSG:", epsg))
+    
+  } else {
+    message("Planar CRS detected. No transformation needed.")
+  }
+}
+
+#Function to msrm computation (Always forced to 1 fmin)
+msrm <- function(dem, fmin = 5, fmax = 100, x = 1.6, outdir = tempdir()) {
+  library(terra)
+  
+  # --- Compute resolution (m) ---
+  rr <- mean(res(dem))
+  if (fmin <= rr) {
+    message("fmin smaller than pixel size; setting fmin = raster resolution")
+    fmin <- rr
+  }
+  
+  # --- Calculate i and n values ---
+  i <- floor(((fmin - rr) / (2 * rr))^(1 / x))
+  n <- ceiling(((fmax - rr) / (2 * rr))^(1 / x))
+  
+  # Ensure valid kernel indices
+  if (is.nan(i) || i < 1) i <- 1
+  if (is.nan(n) || n <= i) n <- i + 1
+  
+  message("Raster resolution: ", round(rr, 3), " m")
+  message("i = ", i, ", n = ", n)
+  
+  reliefs <- c()
+  prev <- NULL
+  
+  for (ndx in i:n) {
+    rad <- round((ndx ^ x))
+    if (rad < 1) rad <- 1
+    
+    if (rad > 50) {
+      warning("Kernel radius > 50 pixels skipped to avoid memory issues (rad = ", rad, ").")
+      next
+    }
+    
+    k <- matrix(1, nrow = rad * 2 + 1, ncol = rad * 2 + 1)
+    k <- k / sum(k)
+    
+    # Create unique temp file
+    fpath <- tempfile(pattern = paste0("LP_", ndx, "_"), tmpdir = outdir, fileext = ".tif")
+    f <- focal(dem, w = k, fun = sum, na.rm = TRUE, filename = fpath, overwrite = TRUE)
+    
+    if (!is.null(prev)) {
+      rpath <- tempfile(pattern = paste0("RM_", ndx, "_"), tmpdir = outdir, fileext = ".tif")
+      rj <- prev - f
+      writeRaster(rj, rpath, overwrite = TRUE)
+      reliefs <- c(reliefs, rpath)
+    }
+    prev <- f
+  }
+  
+  # Combine and compute mean of relief models
+  msrm_files <- rast(reliefs)
+  msrm_raw <- mean(msrm_files)
+  msrm <- round(msrm_raw * 1000) / 1000
+  
+  # Optional: cleanup intermediate files
+  unlink(reliefs)
+  
+  return(msrm)
+}
+
+for (f in 1:length(dtm_list)) {
+  
+  # Load the raster
+  r <- rast(dtm_list[[f]])
+  orig_crs <- crs(r)
+  r_planar <- ensure_planar_crs(r)
+  
+  #Compute MSRM
+  msrm_result <- msrm(r_planar, fmin = 100, fmax = 1000, x = 1.5) #f in meters
+  
+  #Convert raster bakc to original crs
+  msrm_result_back <- project(msrm_result, orig_crs)
+  
+  # Create output filename based on original
+  out_name <- file.path(folder_path, paste0(base_name[f], "_MSRM.tif"))
+  
+  # Save to file
+  writeRaster(msrm_result_back, out_name, overwrite = TRUE)
+  
+}
+
+
+# 03.5 TPI  =====================================================================
+
+## Load Slope rasters
+# List all .tif files in that folder ending with "_AOI_cropped.tif"
+slope_list <- list.files(path = folder_path, 
+                         pattern = "_slope_deg\\.tif$", 
+                         full.names = TRUE)
+
+## Compute TPI
+for (f in 1:length(dtm_list)) {
+  
+  # Load the rasters
+  r <- rast(dtm_list[[f]]) #dtm
+  
+  SlopeDegrees <- rast(slope_list[[f]]) #slope
+  
+  # Compute TPI classified
+  # Compute TPIBig and TPISmall
+  TPIS <- focal(r, w=9, fun=\(x) x[41] - mean(x[-41], na.rm = TRUE)) #100 m
+  
+  TPIB <- focal(r, w=81, fun=\(x) x[3281] - mean(x[-3281], na.rm = TRUE)) #1000 m
+  
+  # Extract the values from the rasters as a numeric vectors
+  slope <- values(SlopeDegrees)   
+  tpi_values_B <- values(TPIB)
+  tpi_values_S <- values(TPIS)
+  
+  # Calculate the mean and standard deviation
+  mean_TPI_B <- mean(tpi_values_B)
+  std_TPI_B  <- sd(tpi_values_B)
+  
+  mean_TPI_S <- mean(tpi_values_S)
+  std_TPI_S  <- sd(tpi_values_S)
+  
+  # Normalize the TPI values
+  TPI_B_normalized <- (tpi_values_B - mean_TPI_B) / std_TPI_B
+  TPI_S_normalized <- (tpi_values_S - mean_TPI_S) / std_TPI_S
+  
+  TPI_B_normalized <- as.integer(round(TPI_B_normalized))
+  TPI_S_normalized <- as.integer(round(TPI_S_normalized))
+  
+  # Initialize an empty vector for classification results
+  classification <- vector("character", length = length(TPI_S_normalized))
+  
+  for (i in 1:length(TPI_S_normalized)) {
+    TPI_SN <- TPI_S_normalized[i]   # Extract SN (TPIst) value
+    TPI_LN <- TPI_B_normalized[i]   # Extract LN (TPIst) value
+    slope_ind <- slope[i]               # Extract slope value
+    
+    # Classification logic based on TPI (SN and LN) and slope conditions
+    if (TPI_SN <= -1) {
+      if (TPI_LN <= -1) {
+        classification[i] <- "Canyons, V-shaped valleys"
+      } else if (-1 < TPI_LN && TPI_LN < 1) {
+        classification[i] <- "Mid-slope drainage, shallow valley"
+      } else if (TPI_LN >= 1) {
+        classification[i] <- "Highland drainage, headwaters"
+      }
+    } else if (-1 < TPI_SN && TPI_SN < 1) {
+      if (TPI_LN <= -1) {
+        classification[i] <- "U-shaped valleys"
+      } else if (-1 < TPI_LN && TPI_LN < 1) {
+        # Check if slope is NA
+        if (is.na(slope_ind)) {
+          classification[i] <- "Undefined plain area"
+        } else {
+          if (slope_ind <= 5) {
+            classification[i] <- "Plains"
+          } else {
+            classification[i] <- "Open slopes"
+          }
+        }
+      } else if (TPI_LN >= 1) {
+        classification[i] <- "Upper slopes"
+      }
+    } else if (TPI_SN >= 1) {
+      if (TPI_LN <= -1) {
+        classification[i] <- "Local ridges/Hills in valleys"
+      } else if (-1 < TPI_LN && TPI_LN < 1) {
+        classification[i] <- "Middle ridges, small hills in plains"
+      } else if (TPI_LN >= 1) {
+        classification[i] <- "Peaks, high ridges"
+      }
+    }
+  }
+  
+  # Convert classification to a raster
+  classification_raster <- TPIS
+  values(classification_raster)[!is.na(values(classification_raster))] <- classification
+  
+  out_name <- file.path(folder_path, paste0(base_name[f], "_tpi_categ.tif"))
+  
+  # Save to file
+  writeRaster(classification_raster, out_name, overwrite = TRUE)
+  
+}
+
+# 03.6 Aspect  ==================================================================
+
+#Load reclass matrix
+rcl <- matrix(c(
+  -1, 0,      1,   # Flat
+  0,    22.5, 2,   # North
+  22.5, 67.5, 3,   # NE
+  67.5, 112.5, 4,  # E
+  112.5, 157.5, 5, # SE
+  157.5, 202.5, 6, # S
+  202.5, 247.5, 7, # SW
+  247.5, 292.5, 8, # W
+  292.5, 337.5, 9, # NW
+  337.5, 360, 2    # North again
+), ncol=3, byrow=TRUE)
+
+for (f in 1:length(dtm_list)) {
+  
+  # Load the raster
+  r <- rast(dtm_list[[f]])
+  
+  r_asp <- terrain(r, v = "aspect", unit = "degrees")
+  
+  # Reclassify raster
+  asp_class <- classify(r_asp, rcl, include.lowest=TRUE, right=FALSE)
+  
+  # Create output filename based on original
+  out_name <- file.path(folder_path, paste0(base_name[f], "_aspect.tif"))
+  
+  # Save to file
+  writeRaster(asp_class, out_name, overwrite = TRUE)
+  
+}
+
+# 03.7 TWI  =====================================================================
+
+for (f in 1:length(dtm_list)) {
+  
+  # Load the raster
+  r <- rast(dtm_list[[f]])
+  
+  # Compute flow direction
+  flow_dir <- terrain(r, v = "flowdir")
+  
+  # Compute flow accumulation (upslope area)
+  flow_acc <- flowAccumulation(flow_dir)
+  
+  # Flow accumulation (number of cells)
+  cell_area <- prod(res(r))
+  flow_acc_area <- flow_acc * cell_area
+  
+  # Slope in radians
+  slope_rad <- terrain(r, v = "slope", unit = "radians")
+  
+  # Compute TWI
+  twi <- log((flow_acc_area + 1) / tan(slope_rad))
+  
+  twi[is.infinite(values(twi))] <- NA
+  
+  # Create output filename based on original
+  out_name <- file.path(folder_path, paste0(base_name[f], "_TWI.tif"))
+  
+  # Save to file
+  writeRaster(twi, out_name, overwrite = TRUE)
+  
+}
+
+# 03.8 Cost distance from rivers ===============================================
+
+# --- Function to ensure planar CRS function ---
+ensure_planar_crs <- function(sf_obj) {
+  current_crs <- st_crs(sf_obj)
+  
+  if (is.na(current_crs)) stop("Input object has no CRS defined!")
+  
+  if (current_crs$units_gdal == "degree") {
+    # Pick an appropriate UTM zone based on the centroid of the data
+    centroid <- st_centroid(st_union(sf_obj))
+    lon <- st_coordinates(centroid)[1]
+    utm_zone <- floor((lon + 180)/6) + 1
+    epsg <- 32600 + utm_zone  # northern hemisphere
+    message("Geographic CRS detected. Reprojecting to planar CRS EPSG:", epsg)
+    sf_obj <- st_transform(sf_obj, epsg)
+  } else {
+    message("Planar CRS detected. No transformation needed.")
+  }
+  
+  return(sf_obj)
+}
+
+
+# Crop the rivers
+
+rivers_croped <- list()
+
+for (area in areas) {
+  
+  # Ensure CRS match
+  if (st_crs(Rivers) != st_crs(bbox_list[[area]])) {
+    Rivers_transformed <- st_transform(Rivers, st_crs(bbox_list[[area]]))
+  }
+  
+  # Spatial crop / intersection
+  rivers_croped[[area]] <- st_crop(Rivers_transformed, bbox_list[[area]])
+  
+  # Rasterisation and distance cost
+  rivers_rast <- rasterize(vect(rivers_croped[[area]]), area_layers[[area]]$DEM, field=1, background=NA)
+  area_layers[[area]]$water.distance <- distance(rivers_rast)
+  
+  
+  st_write(rivers_croped[[area]], "./analysis/data/raw_data/shapefiles/Rivers.gpkg", layer = area, overwrite = TRUE, append = FALSE)
+  writeRaster(area_layers[[area]]$water.distance, paste0("./analysis/data/raw_data/covariates_raw/",area, "water_distance.tif"), overwrite=TRUE)
+}
+
+
+# Crop the lakes
+
+rivers_croped <- list()
+
+# Temporarily disable s2 if using projected CRS
+sf_use_s2(FALSE)
+
+# Repair invalid geometries
+Lakes <- st_make_valid(Lakes)
+
+# Optional: check which features were invalid
+invalid_idx <- which(!st_is_valid(Lakes))
+if(length(invalid_idx) > 0) {
+  message("Fixed ", length(invalid_idx), " invalid lake geometries")
+}
+
+for (area in areas) {
+  
+  # Ensure CRS match
+  if (st_crs(Lakes) != st_crs(bbox_list[[area]])) {
+    lakes_transformed <- st_transform(Lakes, st_crs(bbox_list[[area]]))
+  }
+  
+  # Spatial crop / intersection
+  lakes_croped[[area]] <- st_crop(lakes_transformed, bbox_list[[area]])
+  
+  # Skip empty results
+  if (nrow(lakes_croped[[area]]) == 0) {
+    message("⚠️ No lakes inside bbox for ", region)
+    next
+  }
+  st_write(lakes_croped[[area]], "./analysis/data/raw_data/shapefiles/Lakes.gpkg", layer = area, overwrite = TRUE, append = FALSE)
+}
+
+#Load the rivers
+gpkg_path <- "analysis/data/raw_data/shapefiles/Rivers.gpkg"
+
+#Load the lakes
+gpkg_path_lakes <- "analysis/data/raw_data/shapefiles/Lakes.gpkg"
+
+# Get layer names
+layer_names <- st_layers(gpkg_path)$name
+layer_names_lakes <- st_layers(gpkg_path_lakes)$name
+
+# Read each layer into a list
+gpkg_list <- lapply(layer_names, function(layer) {
+  st_read(gpkg_path, layer = layer, quiet = TRUE)
+})
+
+gpkg_list_lakes <- lapply(layer_names_lakes, function(layer) {
+  st_read(gpkg_path_lakes, layer = layer, quiet = TRUE)
+})
+
+# Optionally name the list elements
+names(gpkg_list) <- layer_names
+names(gpkg_list_lakes) <- layer_names_lakes
+
+for (f in 1:length(dtm_list)) {
+  
+  if(f == 3) {
+    # Load the raster
+    r <- rast(dtm_list[[f]])
+    r_lr <- aggregate(r, fact= 2, fun = mean)
+    orig_crs <- st_crs(r) #Store original CRS
+    
+    #Load the rivers and change them to points
+    rivers <- gpkg_list[[base_name[f]]]
+    rivers_proj <- ensure_planar_crs(rivers)
+    rivers_proj <- st_cast(rivers_proj, "LINESTRING") #Ensure is a linestring
+    rivers_proj <-  rivers_proj[rivers_proj$ORD_FLOW %in% c(1,2,3,4,5,6,7,8), ]
+    
+    #Subset rivers from permanent and seasonal
+    rivers_seasonal <- rivers_proj[rivers_proj$ORD_FLOW %in% c(5,6,7,8), ]
+    
+    #Sample lines
+    samples <- st_line_sample(rivers_proj, density = 1 / 50, type = "regular")  #Samp le points every 50 m along each line
+    samples_s <- st_line_sample(rivers_seasonal, density = 1 / 50, type = "regular")  #Samp le points every 50 m along each line
+    
+    #Convert all of the lines to point to calculate cost
+    all_points <- st_sfc(crs = st_crs(rivers_proj))
+    all_points_s <- st_sfc(crs = st_crs(rivers_proj))
+    
+    for (i in seq_along(samples)) {
+      if (length(samples[[i]]) > 0) {
+        # Wrap as sfc before casting — preserves CRS
+        mp <- st_sfc(samples[[i]], crs = st_crs(rivers_proj))
+        pts <- st_cast(mp, "POINT")
+        all_points <- c(all_points, pts)
+      }
+    }
+    
+    for (i in seq_along(samples_s)) {
+      if (length(samples_s[[i]]) > 0) {
+        # Wrap as sfc before casting — preserves CRS
+        mp_s <- st_sfc(samples_s[[i]], crs = st_crs(rivers_proj))
+        pts_s <- st_cast(mp_s, "POINT")
+        all_points_s <- c(all_points_s, pts_s)
+      }
+    }
+    
+    rivers_points <- st_sf(geometry = all_points)  # Convert to sf object
+    rivers_points <- st_transform(rivers_points, orig_crs)
+    
+    rivers_points_s <- st_sf(geometry = all_points_s)  # Convert to sf object
+    rivers_points_s <- st_transform(rivers_points_s, orig_crs)
+    
+    #Compute cost raster
+    cost_raster <- create_slope_cs(r_lr, cost_function =  "tobler", neighbours = 16)
+    
+    # Initialize a raster to store the minimum accumulated cost values
+    min_cc <- rasterise(cost_raster)
+    min_cc_s <- rasterise(cost_raster)
+    
+    values(min_cc) <- Inf
+    values(min_cc_s) <- Inf
+    
+    
+    ## General rivers ############################################################
+    
+    for (i in 1:nrow(rivers_points)) {
+      # Compute accumulated cost from each origin
+      coords <- st_coordinates(rivers_points[i,])
+      
+      # Check if point is inside raster extent
+      if (!all(coords[,1] >= xmin(min_cc) & coords[,1] <= xmax(min_cc) &
+               coords[,2] >= ymin(min_cc) & coords[,2] <= ymax(min_cc))) {
+        next  # skip this iteration
+      }
+      
+      cc <- create_accum_cost(x = cost_raster, origins = rivers_points[i,], FUN = mean, rescale = FALSE)
+      
+      # Update min_cc with the minimum value between the existing and the new cc
+      min_cc <- min(min_cc, cc, na.rm = TRUE)
+      
+      rm(cc)
+      rm(coords)
+      gc()
+    }
+    
+    #Replace Inf with NA
+    min_cc[values(min_cc) == Inf] <- NA
+    
+    #Resample to original resolution
+    min_cc <- resample(min_cc, r, method = "bilinear")
+    
+    # Create output filename based on original
+    out_name <- file.path(folder_path, paste0(base_name[f], "_cost_from_rivers.tif"))
+    
+    # Save to file
+    writeRaster(min_cc, out_name, overwrite = TRUE)
+    
+    ## Seasonal rivers ###########################################################
+    
+    for (i in 1:nrow(rivers_points_s)) {
+      # Compute accumulated cost from each origin
+      coords <- st_coordinates(rivers_points_s[i,])
+      
+      # Check if point is inside raster extent
+      if (!all(coords[,1] >= xmin(min_cc_s) & coords[,1] <= xmax(min_cc_s) &
+               coords[,2] >= ymin(min_cc_s) & coords[,2] <= ymax(min_cc_s))) {
+        next  # skip this iteration
+      }
+      
+      cc <- create_accum_cost(x = cost_raster, origins = rivers_points[i,], FUN = mean, rescale = FALSE)
+      
+      # Update min_cc_s with the minimum value between the existing and the new cc
+      min_cc_s <- min(min_cc_s, cc, na.rm = TRUE)
+      
+      rm(cc)
+      rm(coords)
+      gc()
+    }
+    
+    #Replace Inf with NA
+    min_cc_s[values(min_cc_s) == Inf] <- NA
+    
+    #Resample to original resolution
+    min_cc_s <- resample(min_cc_s, r, method = "bilinear")
+    
+    # Create output filename based on original
+    out_name <- file.path(folder_path, paste0(base_name[f], "_cost_from_rivers_seasonal.tif"))
+    
+    # Save to file
+    writeRaster(min_cc_s, out_name, overwrite = TRUE)
+    
+    
+  } else {
+    
+    # Load the raster
+    r <- rast(dtm_list[[f]])
+    r_lr <- aggregate(r, fact= 2, fun = mean)
+    orig_crs <- st_crs(r) #Store original CRS
+    
+    #Load the rivers and change them to points
+    rivers <- gpkg_list[[base_name[f]]]
+    rivers_proj <- ensure_planar_crs(rivers)
+    rivers_proj <- st_cast(rivers_proj, "LINESTRING") #Ensure is a linestring
+    rivers_proj <-  rivers_proj[rivers_proj$ORD_FLOW %in% c(1,2,3,4,5,6,7,8), ]
+    
+    #Subset rivers from permanent and seasonal
+    rivers_permanent <- rivers_proj[rivers_proj$ORD_FLOW %in% c(1,2,3,4), ]
+    rivers_seasonal <- rivers_proj[rivers_proj$ORD_FLOW %in% c(5,6,7,8), ]
+    
+    #Sample lines
+    samples <- st_line_sample(rivers_proj, density = 1 / 50, type = "regular")  #Samp le points every 50 m along each line
+    samples_p <- st_line_sample(rivers_permanent, density = 1 / 50, type = "regular")  #Samp le points every 50 m along each line
+    samples_s <- st_line_sample(rivers_seasonal, density = 1 / 50, type = "regular")  #Samp le points every 50 m along each line
+    
+    #Convert all of the lines to point to calculate cost
+    all_points <- st_sfc(crs = st_crs(rivers_proj))
+    all_points_p <- st_sfc(crs = st_crs(rivers_proj))
+    all_points_s <- st_sfc(crs = st_crs(rivers_proj))
+    
+    for (i in seq_along(samples)) {
+      if (length(samples[[i]]) > 0) {
+        # Wrap as sfc before casting — preserves CRS
+        mp <- st_sfc(samples[[i]], crs = st_crs(rivers_proj))
+        pts <- st_cast(mp, "POINT")
+        all_points <- c(all_points, pts)
+      }
+    }
+    
+    for (i in seq_along(samples_p)) {
+      if (length(samples_p[[i]]) > 0) {
+        # Wrap as sfc before casting — preserves CRS
+        mp_p <- st_sfc(samples_p[[i]], crs = st_crs(rivers_proj))
+        pts_p <- st_cast(mp, "POINT")
+        all_points_p <- c(all_points_p, pts_p)
+      }
+    }
+    for (i in seq_along(samples_s)) {
+      if (length(samples_s[[i]]) > 0) {
+        # Wrap as sfc before casting — preserves CRS
+        mp_s <- st_sfc(samples_s[[i]], crs = st_crs(rivers_proj))
+        pts_s <- st_cast(mp_s, "POINT")
+        all_points_s <- c(all_points_s, pts_s)
+      }
+    }
+    
+    rivers_points <- st_sf(geometry = all_points)  # Convert to sf object
+    rivers_points <- st_transform(rivers_points, orig_crs)
+    
+    rivers_points_p <- st_sf(geometry = all_points_p)  # Convert to sf object
+    rivers_points_p <- st_transform(rivers_points_p, orig_crs)
+    
+    rivers_points_s <- st_sf(geometry = all_points_s)  # Convert to sf object
+    rivers_points_s <- st_transform(rivers_points_s, orig_crs)
+    
+    #Sample Rhin lakes
+    if (f == 4) {
+      
+      lakes <- gpkg_list_lakes[[1]]
+      lakes_proj <- st_transform(lakes, st_crs(rivers_proj))
+      lakes_proj <- st_cast(lakes_proj, "LINESTRING") #Ensure is a linestring
+      sample_lakes <-  st_line_sample(lakes_proj, density = 1 / 50, type = "regular")
+      all_points_lakes <- st_sfc(crs = st_crs(lakes_proj))
+      
+      for (i in seq_along(sample_lakes)) {
+        if (length(sample_lakes[[i]]) > 0) {
+          # Wrap as sfc before casting — preserves CRS
+          mp_ll <- st_sfc(sample_lakes[[i]], crs = st_crs(rivers_proj))
+          pts_ll <- st_cast(mp_ll, "POINT")
+          all_points_lakes <- c(all_points_lakes, pts_ll)
+        }
+      }
+      
+      lakes_points <- st_sf(geometry = all_points_lakes)  # Convert to sf object
+      lakes_points <- st_transform(lakes_points, orig_crs)
+      
+      #Unite lakes with permanent rivers and all rivers
+      rivers_points <- st_union(rivers_points, lakes_points)
+      rivers_points_p <- st_union(rivers_points_p, lakes_points)
+      
+    }
+    
+    #Compute cost raster
+    cost_raster <- create_slope_cs(r_lr, cost_function =  "tobler", neighbours = 16)
+    
+    # Initialize a raster to store the minimum accumulated cost values
+    min_cc <- rasterise(cost_raster)
+    min_cc_p <- rasterise(cost_raster)
+    min_cc_s <- rasterise(cost_raster)
+    
+    values(min_cc) <- Inf
+    values(min_cc_p) <- Inf
+    values(min_cc_s) <- Inf
+    
+    
+    ## General rivers ############################################################
+    
+    for (i in 1:nrow(rivers_points)) {
+      # Compute accumulated cost from each origin
+      coords <- st_coordinates(rivers_points[i,])
+      
+      # Check if point is inside raster extent
+      if (!all(coords[,1] >= xmin(min_cc) & coords[,1] <= xmax(min_cc) &
+               coords[,2] >= ymin(min_cc) & coords[,2] <= ymax(min_cc))) {
+        next  # skip this iteration
+      }
+      
+      cc <- create_accum_cost(x = cost_raster, origins = rivers_points[i,], FUN = mean, rescale = FALSE)
+      
+      # Update min_cc with the minimum value between the existing and the new cc
+      min_cc <- min(min_cc, cc, na.rm = TRUE)
+      
+      rm(cc)
+      rm(coords)
+      gc()
+    }
+    
+    #Replace Inf with NA
+    min_cc[values(min_cc) == Inf] <- NA
+    
+    #Resample to original resolution
+    min_cc <- resample(min_cc, r, method = "bilinear")
+    
+    # Create output filename based on original
+    out_name <- file.path(folder_path, paste0(base_name[f], "_cost_from_rivers.tif"))
+    
+    # Save to file
+    writeRaster(min_cc, out_name, overwrite = TRUE)
+    
+    ## Permanent rivers ##########################################################
+    
+    for (i in 1:nrow(rivers_points_p)) {
+      # Compute accumulated cost from each origin
+      coords <- st_coordinates(rivers_points_p[i,])
+      
+      # Check if point is inside raster extent
+      if (!all(coords[,1] >= xmin(min_cc_p) & coords[,1] <= xmax(min_cc_p) &
+               coords[,2] >= ymin(min_cc_p) & coords[,2] <= ymax(min_cc_p))) {
+        next  # skip this iteration
+      }
+      
+      cc <- create_accum_cost(x = cost_raster, origins = rivers_points_p[i,], FUN = mean, rescale = FALSE)
+      
+      # Update min_cc_p with the minimum value between the existing and the new cc
+      min_cc_p <- min(min_cc_p, cc, na.rm = TRUE)
+      
+      rm(cc)
+      rm(coords)
+      gc()
+    }
+    
+    #Replace Inf with NA
+    min_cc_p[values(min_cc_p) == Inf] <- NA
+    
+    #Resample to original resolution
+    min_cc_p <- resample(min_cc_p, r, method = "bilinear")
+    
+    # Create output filename based on original
+    out_name <- file.path(folder_path, paste0(base_name[f], "_cost_from_rivers_permanent.tif"))
+    
+    # Save to file
+    writeRaster(min_cc_p, out_name, overwrite = TRUE)
+    
+    ## Seasonal rivers ###########################################################
+    
+    for (i in 1:nrow(rivers_points_s)) {
+      # Compute accumulated cost from each origin
+      coords <- st_coordinates(rivers_points_s[i,])
+      
+      # Check if point is inside raster extent
+      if (!all(coords[,1] >= xmin(min_cc_s) & coords[,1] <= xmax(min_cc_s) &
+               coords[,2] >= ymin(min_cc_s) & coords[,2] <= ymax(min_cc_s))) {
+        next  # skip this iteration
+      }
+      
+      cc <- create_accum_cost(x = cost_raster, origins = rivers_points[i,], FUN = mean, rescale = FALSE)
+      
+      # Update min_cc_s with the minimum value between the existing and the new cc
+      min_cc_s <- min(min_cc_s, cc, na.rm = TRUE)
+      
+      rm(cc)
+      rm(coords)
+      gc()
+    }
+    
+    #Replace Inf with NA
+    min_cc_s[values(min_cc_s) == Inf] <- NA
+    
+    #Resample to original resolution
+    min_cc_s <- resample(min_cc_s, r, method = "bilinear")
+    
+    # Create output filename based on original
+    out_name <- file.path(folder_path, paste0(base_name[f], "_cost_from_rivers_seasonal.tif"))
+    
+    # Save to file
+    writeRaster(min_cc_s, out_name, overwrite = TRUE)
+    
+    
+  }
+  
+}
+```
+
+
+## Raster pre-process
+
+```{r setup raster pre-process, echo=FALSE, warning=FALSE, message=FALSE}
+library(pacman)
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
+```
+
+```{r env raster pre-process, eval= FALSE}
+
+# 0 Environment setup ##########################################################
+
+# 0.1 Prepare environment ======================================================
+
+# Folder check
+getwd()
+
+# Set folder direction
+setwd()
+
+# Clean up workspace
+rm(list = ls(all.names = TRUE))
+
+# 0.2 Install packages =========================================================
+
+install.packages("pacman")        #Install and load the "pacman" package (allow easier download of packages)
+library(pacman)
+pacman::p_load(terra, sf, googledrive, mapview, leastcostpath) # Specify required packages and download it if needed
+
+# 0.3 Show session infos =======================================================
+
+sessionInfo()
+```
+
+```
+R version 4.6.0 (2026-04-24)
+Platform: x86_64-pc-linux-gnu
+Running under: EndeavourOS
+
+Matrix products: default
+BLAS:   /usr/lib/libblas.so.3.12.0 
+LAPACK: /usr/lib/liblapack.so.3.12.0  LAPACK version 3.12.0
+
+locale:
+ [1] LC_CTYPE=fr_FR.UTF-8       LC_NUMERIC=C               LC_TIME=fr_FR.UTF-8        LC_COLLATE=fr_FR.UTF-8     LC_MONETARY=fr_FR.UTF-8   
+ [6] LC_MESSAGES=fr_FR.UTF-8    LC_PAPER=fr_FR.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=fr_FR.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Europe/Paris
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+[1] leastcostpath_2.0.13 mapview_2.11.4       googledrive_2.1.2    sf_1.1-1             terra_1.9-27        
+
+loaded via a namespace (and not attached):
+ [1] rappdirs_0.3.4     generics_0.1.4     class_7.3-23       KernSmooth_2.23-26 lattice_0.22-9     hms_1.1.4          digest_0.6.39      magrittr_2.0.5    
+ [9] RColorBrewer_1.1-3 grid_4.6.0         iterators_1.0.14   fastmap_1.2.0      foreach_1.5.2      e1071_1.7-17       DBI_1.3.0          purrr_1.2.2       
+[17] scales_1.4.0       crosstalk_1.2.2    codetools_0.2-20   cli_3.6.6          rlang_1.2.0        units_1.0-1        base64enc_0.1-6    otel_0.2.0        
+[25] tools_4.6.0        raster_3.6-32      tzdb_0.5.0         gargle_1.6.1       dplyr_1.2.1        pacman_0.5.1       vctrs_0.7.3        R6_2.6.1          
+[33] png_0.1-9          stats4_4.6.0       proxy_0.4-29       lifecycle_1.0.5    classInt_0.4-11    leaflet_2.2.3      fs_2.1.0           htmlwidgets_1.6.4 
+[41] pkgconfig_2.0.3    pillar_1.11.1      glue_1.8.1         Rcpp_1.1.1-1.1     tibble_3.3.1       tidyselect_1.2.1   rstudioapi_0.18.0  farver_2.1.2      
+[49] htmltools_0.5.9    leafem_0.2.5       satellite_1.0.6    compiler_4.6.0     sp_2.2-1 
+```
+
+
+We are importing previously filter sites and also downloading the [GEE export](#GEE-data) from the GoogleDrive with the `googledrive` package.
+
+```{r raster pre-process import data, eval= FALSE}
+# 01 Import data sets ##########################################################
+
+eras <- c("BA", "IA")
+areas <- c("Rhine", "Lazio", "Shephelah", "Kurdistan")
+projections <- list(Rhine = "EPSG:32632", Lazio = "EPSG:32633", Shephelah = "EPSG:32636", Kurdistan = "EPSG:32638")
+load("./data/derived_data/save/Sites_filter.RData")
+
+# 01.1 Import from Google Drive ================================================
+drive_auth()
+files <- drive_ls()
+
+for (area in areas) {
+  
+  # Import LSWI 1613
+  file <- files[files$name == paste0(area, "_Sentinel2_LSWI_1613.tif"),]
+  drive_download(
+    as_id(file$id),
+    path = paste0("./data/raw_data/covariates_raw/",area, "_Sentinel2_LSWI_1613_raw.tif"), 
+    overwrite = TRUE
+  )
+  
+  # Import LSWI 2202
+  file <- files[files$name == paste0(area, "_Sentinel2_LSWI_2202.tif"),]
+  drive_download(
+    as_id(file$id),
+    path = paste0("./data/raw_data/covariates_raw/",area, "_Sentinel2_LSWI_2202_raw.tif"), 
+    overwrite = TRUE
+  )
+  
+  # Import NDWI
+  file <- files[files$name == paste0(area, "_Sentinel2_NDWI.tif"),]
+  drive_download(
+    as_id(file$id),
+    path = paste0("./data/raw_data/covariates_raw/",area, "_Sentinel2_NDWI_raw.tif"), 
+    overwrite = TRUE
+  )
+  
+  # Import TCTW
+  file <- files[files$name == paste0(area, "_Sentinel2_TCTW.tif"),]
+  drive_download(
+    as_id(file$id),
+    path = paste0("./data/raw_data/covariates_raw/",area, "_Sentinel2_TCTW_raw.tif"), 
+    overwrite = TRUE
+  )
+}
+
+# 1.2 Compute each bbox ========================================================
+
+bbox_list <- list()
+
+for (area in areas) {
+  file <- paste0(area,"_all")
+  sites <- get(file)
+  bbox <- st_bbox(sites)
+  bbox_sf <- st_as_sfc(bbox)
+  bbox_list[[area]] <- st_buffer(bbox_sf, 750)
+}
+```
+
+Once we have downloaded all the data we are resealing with a `bilinear` method for continuous and `mode` method for discrete data. The information of the type of data is also kept with the *type* column. All the covariates are merged into a stack raster before beeing saved.
+
+The Shephelah region do not have any *sesonal_rivers* so they have to be removed.
+
+```{r raster pre-process resize and stack, eval= FALSE}
+# 2 Crop the covariates rivers and lakes with AOIs #############################
+
+# 02.1 Resize and reproject all layers =========================================
+
+area_layers <- list()
+layers_names <- c("BA_bio03", "BA_bio12", "BA_bio15", "BA_bio16", "IA_bio03", "IA_bio12", "IA_bio15", 
+                  "IA_bio16", "Aridity", "Aspect", "River_cost", "River_cost_permanent", "River_cost_seasonal",
+                  "MSRM", "LSWI.1613", "LSWI.2202", "NDWI", "TCTW", "Slope", "TPI", "TWI")
+
+type <- as.factor(c("cont", "cont", "cont", "cont", "cont", "cont", "cont", "cont", "cont", 
+                    "disc", "cont", "cont", "cont", "cont", "cont", "cont", "cont", 
+                    "cont", "cont", "disc", "cont"))
+
+
+for (area in areas) {
+  DEM <- rast(paste0("./data/raw_data/covariates_raw/", area,"_DEM_raw.tif"))
+  DEM <- project(DEM, projections[[area]])
+  mask <- vect(bbox_list[[area]])
+  DEM <- crop(DEM, mask)
+  
+  list <- list.files("./data/raw_data/covariates_raw/", paste0(area, ".*\\.tif$"), recursive = TRUE, full.names = TRUE)
+  
+  if (area == "Shephelah") {
+    list <- list[!grepl("DEM|rivers_seasonal", list)] # Remove the DEM
+    layers_names_updated <- layers_names[!grepl("River_cost_seasonal|River_cost_permanent", layers_names, ignore.case = TRUE)]
+    type_updated <- type[-c(12,13)]
+  } else {
+    list <- list[!grepl("DEM", list)] # Remove the DEM
+    layers_names_updated <- layers_names
+    type_updated <- type
+  }
+  
+  provisional_layers <- list()
+   for (i in 1:length(type_updated)) {
+     r <- rast(list[[i]])
+     layer_type <- type_updated[i]
+     
+     if (layer_type == "cont") {
+       r <- project(r, projections[[area]], method = "bilinear")
+       r <- crop(r, DEM)
+       r <- resample(r, DEM)
+     } else if (layer_type == "disc") {
+       r <- project(r, projections[[area]], method = "mode")
+       r <- crop(r, DEM)
+       r <- resample(r, DEM, method = "mode")
+     }
+     r <- mask(r, DEM)
+     names(r) <- layers_names_updated[[i]]
+     provisional_layers[[layers_names_updated[[i]]]] <- r
+   }
+  provisional_layers[["DEM"]] <- DEM
+  r <- rast(provisional_layers)
+  r$TWI[r$TWI > 10, ] <- NA     # Remove water area
+  area_layers[[area]] <- r
+}
+
+
+for (area in areas) {
+writeRaster(area_layers[[area]], paste0("./data/raw_data/covariates/",area, "_covariates.tif"), overwrite=TRUE)
+}
+
+```
+
+
+# Archaeological predictive models (APMs)
+
+## APM pre-process
+
+This part of the script is made to transform the raster files into hexagonal tiles to produce more accurate movement simulation following an isotropic disposition.
+
+```{r setup APM pre-process, echo=FALSE, warning=FALSE, message=FALSE}
+library(pacman)
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
+```
+
+```{r env APM pre-process, eval= FALSE}
+
+# 0 Environment setup ##########################################################
+
+# 0.1 Prepare environment ======================================================
+
+# Folder check
+getwd()
+
+# Set folder direction
+
+# Clean up workspace
+rm(list=ls())
+
+# 0.2 Install packages =========================================================
+
+install.packages("pacman")        
+#Install and load the "pacman" package (allow easier download of packages)
+library(pacman)
+pacman::p_load(terra, cli, sf, doParallel, exactextractr, foreach, mapview, yardstick, dplyr, ggplot2, patchwork, 
+               viridis, caret, MLmetrics, readr, corrplot, kableExtra)
+
+# 0.3 Show session infos =======================================================
+
+sessionInfo()
+```
+
+```
+R version 4.6.0 (2026-04-24)
+Platform: x86_64-pc-linux-gnu
+Running under: EndeavourOS
+
+Matrix products: default
+BLAS:   /usr/lib/libblas.so.3.12.0 
+LAPACK: /usr/lib/liblapack.so.3.12.0  LAPACK version 3.12.0
+
+locale:
+ [1] LC_CTYPE=fr_FR.UTF-8       LC_NUMERIC=C               LC_TIME=fr_FR.UTF-8        LC_COLLATE=fr_FR.UTF-8     LC_MONETARY=fr_FR.UTF-8   
+ [6] LC_MESSAGES=fr_FR.UTF-8    LC_PAPER=fr_FR.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=fr_FR.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Europe/Paris
+tzcode source: system (glibc)
+
+attached base packages:
+[1] parallel  stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] kableExtra_1.4.0     corrplot_0.95        readr_2.2.0          MLmetrics_1.1.3      caret_7.0-1          lattice_0.22-9       viridis_0.6.5       
+ [8] viridisLite_0.4.3    patchwork_1.3.2      ggplot2_4.0.3        dplyr_1.2.1          yardstick_1.4.0      mapview_2.11.4       exactextractr_0.10.1
+[15] doParallel_1.0.17    iterators_1.0.14     foreach_1.5.2        sf_1.1-1             cli_3.6.6            terra_1.9-27        
+
+loaded via a namespace (and not attached):
+ [1] DBI_1.3.0            pROC_1.19.0.1        gridExtra_2.3        rlang_1.2.0          magrittr_2.0.5       otel_0.2.0           e1071_1.7-17        
+ [8] compiler_4.6.0       png_0.1-9            systemfonts_1.3.2    vctrs_0.7.3          reshape2_1.4.5       stringr_1.6.0        pkgconfig_2.0.3     
+[15] fastmap_1.2.0        labeling_0.4.3       leafem_0.2.5         rmarkdown_2.31       prodlim_2026.03.11   tzdb_0.5.0           ragg_1.5.2          
+[22] purrr_1.2.2          xfun_0.57            satellite_1.0.6      cachem_1.1.0         jsonlite_2.0.0       recipes_1.3.2        R6_2.6.1            
+[29] bslib_0.10.0         stringi_1.8.7        RColorBrewer_1.1-3   parallelly_1.47.0    rpart_4.1.27         jquerylib_0.1.4      lubridate_1.9.5     
+[36] Rcpp_1.1.1-1.1       knitr_1.51           future.apply_1.20.2  base64enc_0.1-6      pacman_0.5.1         Matrix_1.7-5         splines_4.6.0       
+[43] nnet_7.3-20          timechange_0.4.0     tidyselect_1.2.1     rstudioapi_0.18.0    timeDate_4052.112    codetools_0.2-20     listenv_0.10.1      
+[50] tibble_3.3.1         plyr_1.8.9           withr_3.0.2          S7_0.2.2             evaluate_1.0.5       future_1.70.0        survival_3.8-6      
+[57] units_1.0-1          proxy_0.4-29         xml2_1.5.2           pillar_1.11.1        KernSmooth_2.23-26   stats4_4.6.0         generics_0.1.4      
+[64] sp_2.2-1             hms_1.1.4            scales_1.4.0         globals_0.19.1       class_7.3-23         glue_1.8.1           tools_4.6.0         
+[71] data.table_1.18.2.1  ModelMetrics_1.2.2.2 gower_1.0.2          grid_4.6.0           crosstalk_1.2.2      ipred_0.9-15         nlme_3.1-169        
+[78] raster_3.6-32        textshaping_1.0.5    svglite_2.2.2        lava_1.9.0           gtable_0.3.6         sass_0.4.10          digest_0.6.39       
+[85] classInt_0.4-11      htmlwidgets_1.6.4    farver_2.1.2         htmltools_0.5.9      lifecycle_1.0.5      leaflet_2.2.3        hardhat_1.4.3       
+[92] MASS_7.3-65    
+```
+### Hexagonal tessellation
+
+We are using the `sf` package with `sf_make_grid` function, to make a grid of 50 x 50 m hexagonal tiles. It is important to distinguish discrete from continuous variables.
+
+```{r grid creation APM pre-process, eval= FALSE}
+# 01 Prepare the tiles and rasters #############################################
+
+# 1.1 Import all predictors ====================================================
+
+eras <- c("BA", "IA")
+areas <- c("Rhine", "Lazio", "Shephelah", "Kurdistan")
+projections <- list(Rhine = "EPSG:32632", Lazio = "EPSG:32633", Shephelah = "EPSG:32636", Kurdistan = "EPSG:32638")
+
+predictors <- list()
+
+for (area in areas) {
+  predictors[[area]]  <- rast(paste0("./analysis/data/raw_data/covariates/",area,"_covariates.tif"))   
+}
+
+# 1.2 Convert into tiles =======================================================
+
+hex_grid <- list()
+for (area in areas) {
+  hex_grid[[area]] <- st_make_grid(
+    st_as_sf(as.polygons(ext(predictors[[area]]))),
+    cellsize = 50,
+    square = FALSE)
+  
+  
+  hex_grid[[area]] <- st_sf(id = 1:length(hex_grid[[area]]), geometry = hex_grid[[area]], crs = projections[[area]])
+  st_write(hex_grid[[area]], "./analysis/data/raw_data/covariates/Hex_grid.gpkg", layer = paste0(area,"_grid_50"))
+}
+
+# Set the discrete and continuous raster
+type <- as.factor(c("cont", "cont", "cont", "cont", "cont", "cont", "cont", "cont", "cont", 
+                    "disc", "cont", "cont", "cont", "cont", "cont", "cont", "cont", "cont", 
+                    "cont", "disc", "cont", "cont"))
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+hex_sf <- list()
+
+for (area in areas) {
+  sf <- hex_grid[[area]]
+  
+  if (area == "Shephelah") {
+    type_updated <- type[-c(12,13)]
+  } else {
+    type_updated <- type
+  }
+  
+  cli_text("Running tessellation i = {.val {area}} ({.val {4}} layers)")
+  cli_progress_bar(
+    format = "Layer {.val {i}}: {.val {layer_name}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+    total = length(type_updated), 
+    clear = FALSE
+  )
+  
+  r <- predictors[[area]]
+  
+  for(i in 1:length(type_updated)){
+    layer_name <- names(r)[i]
+    layer_type <- type_updated[i]
+    if (layer_type == "cont") {
+      sf[[layer_name]] <- exact_extract(r[[i]], sf, "mean")
+    } else if (layer_type == "disc") {
+      sf[[layer_name]] <- exact_extract(r[[i]], sf, "mode")
+    }
+    cli_progress_update()
+  }
+  hex_sf[[area]] <- sf
+  cli_progress_done()
+  cat("\n")
+  
+  st_write(sf, "./analysis/data/raw_data/covariates/Hex_grid.gpkg", layer = paste0(area,"_covariates"), overwrite = TRUE, append = FALSE)
+}
+stopCluster(cl)
+```
+
+
+```
+Running tessellation i = "Rhine" (4 layers)
+Layer 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:21:41.3
+
+Running tessellation i = "Lazio" (4 layers)
+Layer 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:24:55.1
+
+Running tessellation i = "Shephelah" (4 layers)
+Layer 20: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [20/20] |  ETA:  0s - Time elapsed: 00:08:36.2
+
+Running tessellation i = "Kurdistan" (4 layers)
+Layer 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:42:3.2 
+```
+
+To evaluate the accuracy of this tesselation we can compared the values with an extracted centroid based on the stack raster.
+
+```{r grid centroid APM pre-process, eval= FALSE}
+# 1.3 Centroid extract  ========================================================
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+cent_sf <- list()
+
+for (area in areas) {
+  
+  if (area == "Shephelah") {
+    type_updated <- type[-c(12,13)]
+  } else {
+    type_updated <- type
+  }
+  
+  cli_text("Running centroid i = {.val {area}} ({.val {4}} layers)")
+  cli_progress_bar(
+    format = "Centroid {.val {i}}: {.val {layer_name}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+    total = length(type_updated), 
+    clear = FALSE
+  )
+  
+  sf <- st_centroid(hex_grid[[area]])
+  sf_layer <- list()
+  
+  for(i in 1:length(type_updated)){
+    layer_name <- names(predictors[[area]][[i]])
+    layer_type <- type_updated[i]
+    if (layer_type == "cont") {
+      sf_layer[[layer_name]] <- extract(predictors[[area]][[i]], vect(sf), method = "bilinear")[,2]
+    } else if (layer_type == "disc") {
+      sf_layer[[layer_name]] <- extract(predictors[[area]][[i]], vect(sf), method = "near")[,2]
+    }
+    cli_progress_update()
+  }
+  cent_sf[[area]] <- sf_layer
+  cli_progress_done()
+  cat("\n")
+  
+}
+stopCluster(cl)  
+
+```
+
+```
+Running centroid i = "Rhine" (4 layers)
+Centroid 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:01:8.2
+
+Running centroid i = "Lazio" (4 layers)
+Centroid 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:01:37
+
+Running centroid i = "Shephelah" (4 layers)
+Centroid 20: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [20/20] |  ETA:  0s - Time elapsed: 00:00:30.4
+
+Running centroïd i = "Kurdistan" (4 layers)
+Centroid 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:02:30.9 
+
+```
+Once this centroid is extracted we can compute figures and statistical to evaluation the accuracy and precision of the transformation.
+
+```{r grid evaluation figures APM pre-process, eval= FALSE}
+# 1.4 Validation of the transformation  ========================================
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+fig_trans <- list()
+
+for (area in areas) {
+  hex_val <- hex_grid[[area]]
+  metrics <- data.frame(Layer = "", Type = "", RMSE = 0, MAE = 0, RSQ = 0, F1 = 0, Accuracy = 0)
+  summaries <- data.frame(Layer = "", Type = "", Min. = 0, `1st Qu.` = 0, Median = 0, Mean = 0, `3rd Qu.` = 0, Max. = 0)
+  
+  if (area == "Shephelah") {
+    type_updated <- type[-c(12,13)]
+  } else {
+    type_updated <- type
+  }
+  
+  cli_text("Running i = {.val {area}} ({.val {4}} layers)")
+  cli_progress_bar(
+    format = "Processing validation {.val {i}}: {.val {layer_name}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+    total = length(type_updated), 
+    clear = FALSE
+  )
+  
+  for(i in 1:length(type_updated)){
+    layer_name <- names(predictors[[area]][[i]])
+    layer_type <- type_updated[i]
+    if (layer_type == "cont") {
+      comparison_table <- tibble(
+        hex_mean = hex_sf[[area]][[layer_name]],
+        cent_bilinear = cent_sf[[area]][[layer_name]]
+      )
+      comparison_table$id <- seq(1, nrow(comparison_table))
+      comparison_table[comparison_table[,2] == "NaN", 2] <- NA
+      comparison_data <- na.omit(comparison_table)
+      values <- metric_set(rmse, mae, rsq)(comparison_data, hex_mean, cent_bilinear)
+      metrics[i,] <- data.frame(Layer = layer_name, Type = layer_type, RMSE = round(values[[1,3]], digit = 3), MAE = round(values[[2,3]], digit = 3), 
+                                RSQ = round(values[[3,3]], digit = 3), NA, NA)
+      
+      comparison_data$difference <- comparison_data$hex_mean - comparison_data$cent_bilinear
+      comparison_data$abs_difference <- abs(comparison_data$difference)
+      comparison_data$relative_diff_pct <- (comparison_data$difference / comparison_data$cent_bilinear) * 100
+      
+      set.seed(1070)
+      plot_data <- comparison_data[sample(nrow(comparison_data), min(10000, nrow(comparison_data))),]
+      
+      gg1 <- ggplot(plot_data, aes(x = cent_bilinear, y = hex_mean)) +
+        geom_point(alpha = 0.6) +
+        geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+        geom_smooth(method = "lm", color = "blue") +
+        labs(x = "Centroid extraction (bilinear)", 
+             y = "Hexagon mean",
+             title = paste0(area, " area correlation between raster and hexagon for ", layer_name)) +
+        theme_classic()
+      
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_correlation_for_",layer_name, ".png"), gg1, width = 6, height = 6)
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_correlation_for_",layer_name, ".pdf"), gg1, width = 6, height = 6)
+      
+      fig_trans[[area]][["hex-rast_cor"]][[layer_name]]  <- gg1
+      
+      r_df <- as.data.frame(predictors[[area]][[i]])
+      r_df$Type <- "Raster"
+      hex_df <- as.data.frame(comparison_data$hex_mean)
+      hex_df$type <- "Hexagon"
+      colnames(hex_df) <- c(layer_name, "Type")
+      data_df <- rbind(r_df, hex_df)
+      colnames(data_df) <- c("Value", "Type")
+      
+      gg2 <- ggplot(data_df, aes(x = Type, y = Value, fill = Type)) +
+        geom_violin() +
+        scale_fill_viridis(discrete = TRUE) +
+        geom_boxplot(fill="white", width=.1, size=0.1) +
+        labs(x = "Type", 
+             y = ylab(paste0(layer_name)),
+             title = paste0(area, " area correlation between \nraster and hexagon for ", layer_name)) +
+        theme_minimal() +
+        theme(legend.position="none")
+      
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_distribution_for_",layer_name, ".png"), gg2, width = 5, height = 6)
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_distribution_for_",layer_name, ".pdf"), gg2, width = 5, height = 6)
+      
+      fig_trans[[area]][["hex-rast_dis"]][[layer_name]]  <- gg2
+      
+      x <- summary(comparison_data[[1]])
+      n <- nrow(summaries)+1
+      summaries[n,] <- data.frame(Layer = layer_name, Type = "Hexagon", Min. = round(x[[1]], digit = 3), `1st Qu.` = round(x[[2]], digit = 3), 
+                                  Median = round(x[[3]], digit = 3), Mean = round(x[[4]], digit = 3), `3rd Qu.` = round(x[[5]], digit = 3), Max. = round(x[[6]], digit = 3))
+      
+      x <- summary(r_df[,1])
+      n <- nrow(summaries)+1
+      summaries[n,] <- data.frame(Layer = layer_name, Type = "Raster", Min. = round(x[[1]], digit = 3), `1st Qu.` = round(x[[2]], digit = 3), 
+                                  Median = round(x[[3]], digit = 3), Mean = round(x[[4]], digit = 3), `3rd Qu.` = round(x[[5]], digit = 3), Max. = round(x[[6]], digit = 3))
+      
+      colnames(comparison_data) <- c("hex_mean", paste0(layer_name,"_centroid"), "id", paste0(layer_name,"_difference"), 
+                                     paste0(layer_name,"_abs_diff"), paste0(layer_name,"_realtive_diff"))
+      x <- merge(comparison_table[,-c(1:2)], comparison_data[,-1], by = "id", all = TRUE)
+      hex_val <- cbind(hex_val, x[,c(2:5)]) 
+      
+    } else if (layer_type == "disc") {
+      comparison_table <- tibble(
+        hex_mean = hex_sf[[area]][[layer_name]],
+        cent_bilinear = cent_sf[[area]][[layer_name]]
+      ) 
+      comparison_table$id <- seq(1, nrow(comparison_table))
+      comparison_data <- as.data.frame(comparison_table)
+      comparison_data[comparison_data[,2] == "NaN", 2] <- NA
+      comparison_data <- na.omit(comparison_data)
+      comparison_data[,1] <- as.factor(comparison_data[,1])
+      comparison_data[,2] <- as.factor(comparison_data[,2])
+      
+      F1 <- F1_Score(comparison_data[,1], comparison_data[,2])
+      accuracy <- sum(comparison_data[,1] == comparison_data[,2]) / nrow(comparison_data)
+      metrics[i,] <- data.frame(Layer = layer_name, Type = layer_type, NA , NA, NA, F1 = round(F1, digit = 3), Accuracy = round(accuracy, digit = 3))
+      
+      cm <- conf_mat(comparison_data, cent_bilinear, hex_mean)
+      gg1 <- autoplot(cm, type = "heatmap") +
+        scale_fill_gradient(low = "white", high = "steelblue")+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        labs(title = paste0(area, " area confusion Matrix for ", layer_name),
+             x = "Centroïd",
+             y = "Hexagon mean",
+             fill = "Count")
+      
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_matrix_for_",layer_name, ".png"), gg1, width = 6, height = 6)
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_matrix_for_",layer_name, ".pdf"), gg1, width = 6, height = 6)
+      
+      r_df <- as.data.frame(predictors[[area]][[i]])
+      r_df$Type <- "Raster"
+      hex_df <- as.data.frame(comparison_data$hex_mean)
+      hex_df$type <- "Hexagon"
+      colnames(hex_df) <- c(layer_name, "Type")
+      data_df <- rbind(r_df, hex_df)
+      colnames(data_df) <- c("Value", "Type")
+      
+      levels <- levels(factor(data_df[,1]))
+      viridis_colors <- viridis(length(levels), option = "D")
+      
+      gg2 <- ggplot(data_df, aes(x = Type, fill = Value)) +
+        geom_bar(position = "fill", width = 0.7) +
+        scale_fill_manual(values = setNames(viridis_colors, levels), drop = FALSE) +
+        ggtitle(paste0(area, " area distribution for ", layer_name)) +
+        xlab("Type") +
+        ylab("Proportion") +
+        theme_minimal() +
+        theme(legend.position = "right") 
+      
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_distribution_class_for_",layer_name, ".png"), gg2, width = 5, height = 7)
+      ggsave(paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_raster_distribution_class_for_",layer_name, ".pdf"), gg2, width = 5, height = 7)
+      
+      fig_trans[[area]][["hex-rast_dis_class"]][[layer_name]] <- gg1
+      
+      colnames(comparison_data) <- c("hex_mean", paste0(layer_name,"_centroid"), "id")
+      name <- colnames(comparison_data[2])
+      x <- merge(comparison_table[,-c(1:2)], comparison_data[,-1], by = "id", all = TRUE)
+      hex_val <- cbind(hex_val, setNames(data.frame(x[[name]]), name))
+    }
+    cli_progress_update()
+  }
+  
+  
+  summaries <- summaries[-1,]
+  write.table(summaries, paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_summary_stats_cells.txt"))
+  write.table(metrics, paste0("./analysis/data/derived_data/pre_process/vectorisation/",area,"_hexagon_transformation_results.txt"))
+  st_write(hex_val, "./analysis/data/raw_data/covariates/Hex_grid.gpkg", layer = paste0(area, "_validation"), overwrite = TRUE, append=FALSE)
+  cli_progress_done()
+  cat("\n") 
+  
+}
+
+save(fig_trans, file = "./analysis/data/derived_data/save/Figure_hex_trans.RData")
+
+rm(list=setdiff(ls(), c("areas", "eras", "projections", "type", "predictors")))
+```
+
+```
+Running validation i = "Rhine" (4 layers)
+Processing validation 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:04:22.5
+```
+
+```{r grid evaluation figures Rhine APM pre-process, echo=FALSE, out.width="100%", fig.align="center", warning=FALSE, message=FALSE}
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Rhine_raster_correlation.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Rhine_hexagon_distribution.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Rhine_matrix.png")
+
+library(readr)
+
+table_01 <- read_delim("../data/derived_data/pre_process/vectorisation/Rhine_hexagon_transformation_results.txt")
+table_01
+
+table_02 <- read_delim("../data/derived_data/pre_process/vectorisation/Rhine_summary_stats_cells.txt")
+table_02
+```
+
+
+```
+Running validation i = "Lazio" (4 layers)
+Processing validation 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:02:51.6
+```
+
+```{r grid evaluation figures Lazio APM pre-process, echo=FALSE, out.width="100%", fig.align="center", warning=FALSE, message=FALSE}
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Lazio_raster_correlation.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Lazio_hexagon_distribution.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Lazio_matrix.png")
+
+
+table_01 <- read_delim("../data/derived_data/pre_process/vectorisation/Lazio_hexagon_transformation_results.txt")
+table_01
+
+table_02 <- read_delim("../data/derived_data/pre_process/vectorisation/Lazio_summary_stats_cells.txt")
+table_02
+```
+
+```
+Running validation i = "Shephelah" (4 layers)
+Processing validation 20: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [20/20] |  ETA:  0s - Time elapsed: 00:01:36.6
+```
+
+```{r grid evaluation figures Shephelah APM pre-process, echo=FALSE, out.width="100%", fig.align="center", warning=FALSE, message=FALSE}
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Shephelah_raster_correlation.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Shephelah_hexagon_distribution.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Shephelah_matrix.png")
+
+
+table_01 <- read_delim("../data/derived_data/pre_process/vectorisation/Shephelah_hexagon_transformation_results.txt")
+table_01
+
+table_02 <- read_delim("../data/derived_data/pre_process/vectorisation/Shephelah_summary_stats_cells.txt")
+table_02
+```
+
+```
+Running validation i = "Kurdistan" (4 layers)
+Processing validation 22: "DEM" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [22/22] |  ETA:  0s - Time elapsed: 00:06:54.1
+```
+
+```{r grid evaluation figures Kurdistan APM pre-process, echo=FALSE, out.width="100%", fig.align="center", warning=FALSE, message=FALSE}
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Kurdistan_raster_correlation.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Kurdistan_hexagon_distribution.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/vectorisation/Kurdistan_matrix.png")
+
+
+table_01 <- read_delim("../data/derived_data/pre_process/vectorisation/Kurdistan_hexagon_transformation_results.txt")
+table_01
+
+table_02 <- read_delim("../data/derived_data/pre_process/vectorisation/Kurdistan_summary_stats_cells.txt")
+table_02
+```
+
+### Areas comparison
+
+Once transformed into hexagonal tiles we can compare the four different areas with another to see any significant differences.
+
+```{r areas statistical comparaison APM pre-process, eval= FALSE}
+# 02 Compare the data ##########################################################
+
+# 2.1 Import files =============================================================
+
+cov <- list()
+sf <- list()
+fig_stats <- list()
+
+for (area in areas) {
+  sf[[area]] <- st_read("./analysis/data/raw_data/covariates/Hex_grid.gpkg", layer = paste0(area, "_covariates"))
+  df <- st_drop_geometry(sf[[area]])
+  df <- df[,-1]
+  cov[[area]] <- df
+}
+
+
+# 2.2 Compute statistics =======================================================
+
+
+summary_numeric_df <- function(data) {
+  num_data <- data[, sapply(data, is.numeric), drop = FALSE]
+  
+  stats <- t(sapply(num_data, function(x) {
+    x_no_na <- x[!is.na(x)]
+    c(NAs = sum(is.na(x)),
+      Mean = mean(x_no_na, na.rm = TRUE),
+      SD = sd(x_no_na, na.rm = TRUE),
+      Min = min(x_no_na, na.rm = TRUE),
+      Q1 = quantile(x_no_na, 0.25, na.rm = TRUE),
+      Median = median(x_no_na, na.rm = TRUE),
+      Q3 = quantile(x_no_na, 0.75, na.rm = TRUE),
+      Max = max(x_no_na, na.rm = TRUE)
+    )
+  }))
+  
+  df_out <- as.data.frame(stats)
+  
+  df_out[] <- lapply(df_out, function(x) if (is.numeric(x)) round(x, 3) else x)
+  
+  df_out
+}
+
+df_summary <- list()
+
+for (area in areas) {
+  df_summary[[area]] <- summary_numeric_df(cov[[area]])
+  write.table(df_summary[[area]], paste0("./analysis/data/derived_data/pre_process/statistics/zones/",area,"_area_stats.txt"))
+}
+```
+
+```{r areas statistical comparaison APM pre-process hide, echo= FALSE, warning=FALSE, message=FALSE}
+
+table <- read.table("../data/derived_data/pre_process/statistics/zones/Rhine_area_stats.txt")
+knitr::kable(table, caption = "Rhine area stats")
+
+table <- read.table("../data/derived_data/pre_process/statistics/zones/Lazio_area_stats.txt")
+knitr::kable(table, caption = "Lazio area stats")
+
+table <- read.table("../data/derived_data/pre_process/statistics/zones/Shephelah_area_stats.txt")
+knitr::kable(table, caption = "Shphelah area stats")
+
+table <-read.table("../data/derived_data/pre_process/statistics/zones/Kurdistan_area_stats.txt")
+knitr::kable(table, caption = "Kurdistan area stats")
+
+```
+
+#### Density plots and Wilcoxon tests {#stat-test}
+
+A density plot is an efficient way to distinguish tendencies. We also computed a Wilcoxon Mann-Whitney test to compare the median of two independent datasets [@wilcoxon_individual_1945, @mann_test_1947]. It is very robust but does not need normality or homoscedasticity of the data. Data values are ranked and then compared across data samples. It can be defined as [pp.607 - 608 @millot_comprendre_2018]:
+
+$$
+W_1 = \sum{}^{n1}_{j=1}r_j
+$$
+
+and
+
+$$
+U1 = W_1 - \frac{1}{2}n_1(n_1+1)
+$$
+
+with:
+
+-   $W_1$ = Wilcoxon test based on class 1.
+-   $j$ = among the $n$ population $j^n$ individual in class 1.
+-   $r_j$ = rank of the $j^n$ individual in class 1.
+-   $n_1$ = population in class 1.
+-   $U_1$ = test variability of Mann-Whitney based on class 1.
+
+If H$_0$ cannot be validated then **difference between median of** $n_1$ and $n_2$ are not significant.
+
+If H$_0$ can be rejected then **difference between median of** $n_1$ and $n_2$ are significant and cannot be explained only by sampling variation.
+
+The defined interval of confidence was **set at** $\alpha$ = 0.05.
+
+```{r areas density plots APM pre-process, eval= FALSE}
+# 2.3 Compute test and density plot =============================================
+
+df_wilcox <- list()
+
+# For covariates present in whole area
+names <- colnames(cov[["Rhine"]])
+names <- names[-c(12:13)]
+
+for (variable in names) {
+  
+  area_a <- cov[["Rhine"]][[variable]]
+  area_b <- cov[["Lazio"]][[variable]]
+  area_c <- cov[["Shephelah"]][[variable]]
+  area_d <- cov[["Kurdistan"]][[variable]]
+  n_sample <- 20000 
+  set.seed(2025)
+  area_a <- sample(na.omit(area_a), n_sample)
+  area_b <- sample(na.omit(area_b), n_sample)
+  area_c <- sample(na.omit(area_c), n_sample)
+  area_d <- sample(na.omit(area_d), n_sample)
+  
+  df <- data.frame(
+    valeur = c(area_a, area_b, area_c, area_d),
+    zone = factor(rep(c("Rhine", "Lazio", "Shephelah", "Kurdistan"), each = n_sample))
+  )
+  
+  if (variable %in% c("TPI", "Aspect")) {
+    
+    gg1 <- ggplot(df, aes(x = valeur, fill = zone)) +
+      geom_histogram(bins = 30, alpha = 0.8, color = "black") +
+      facet_wrap(~zone, ncol = 1, scales = "free_y") +
+      labs(
+        title = paste0(variable, " distribution per area"),
+        x = "Values",
+        y = "Density"
+      )
+    theme_minimal() +
+      theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "none"
+      )
+    
+  } else {
+    # Density plot for other variables
+    gg1 <- ggplot(df, aes(x = valeur, fill = zone)) +
+      geom_density(alpha = 0.3) +
+      labs(
+        title = paste0(variable, " distribution per area"),
+        x = "Values",
+        y = "Density"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.title = element_blank()
+      )
+  }
+  
+  
+  ggsave(paste0("./analysis/data/derived_data/pre_process/statistics/zones/",variable, "_distribution_density.png"), gg1, width = 8, height = 6)
+  ggsave(paste0("./analysis/data/derived_data/pre_process/statistics/zones/",variable, "_distribution_density.pdf"), gg1, width = 8, height = 6)
+  
+  fig_stats[["zone"]][[variable]] <- gg1
+  
+  test_a_b <- wilcox.test(area_a, area_b)
+  test_a_c <- wilcox.test(area_a, area_c)
+  test_a_d <- wilcox.test(area_a, area_d)
+  test_b_c <- wilcox.test(area_b, area_c)
+  test_b_d <- wilcox.test(area_b, area_d)
+  test_c_d <- wilcox.test(area_c, area_d)
+    
+  df_wilcox[[variable]] <- data.frame(
+    Area1 = c("Rhine", "Rhine", "Rhine", "Lazio", "Lazio", "Shephelah"),
+    Area2 = c("Lazio", "Shephelah", "Kurdistan", "Shephelah", "Kurdistan", "Kurdsitan"),
+    variable = variable,
+    p_value = c(test_a_b$p.value, test_a_c$p.value, test_a_d$p.value, test_b_c$p.value, test_b_d$p.value,
+                test_c_d$p.value),
+    result = c(ifelse(test_a_b$p.value < 0.05, "Significant", "Not significant"),
+                ifelse(test_a_c$p.value < 0.05, "Significant", "Not significant"),
+                ifelse(test_a_d$p.value < 0.05, "Significant", "Not significant"),
+                ifelse( test_b_c$p.value < 0.05, "Significant", "Not significant"),
+                ifelse(test_b_d$p.value < 0.05, "Significant", "Not significant"),
+                ifelse(test_c_d$p.value < 0.05, "Significant", "Not significant"))
+  )
+
+}
+
+# For river cost (absent from Shephelah area)
+names <- c("River_cost_permanent","River_cost_seasonal")
+
+for (variable in names) {
+  area_a <- cov[["Rhine"]][[variable]]
+  area_b <- cov[["Lazio"]][[variable]]
+  area_c <- cov[["Kurdistan"]][[variable]]
+  n_sample <- 20000 
+  set.seed(2025)
+  area_a <- sample(na.omit(area_a), n_sample)
+  area_b <- sample(na.omit(area_b), n_sample)
+  area_c <- sample(na.omit(area_c), n_sample)
+  
+  df <- data.frame(
+    valeur = c(area_a, area_b, area_c),
+    zone = factor(rep(c("Rhine", "Lazio", "Kurdistan"), each = n_sample))
+  )
+  
+  gg1 <-  ggplot(df, aes(x = valeur, fill = zone)) +
+    geom_density(alpha = 0.3) +
+    labs(title = paste0(variable," distribution per area"), x = "Value", y = "Density") +
+    theme_minimal()
+  
+  ggsave(paste0("./analysis/data/derived_data/pre_process/statistics/zones/",variable, "_distribution_density.png"), gg1, width = 8, height = 6)
+  ggsave(paste0("./analysis/data/derived_data/pre_process/statistics/zones/",variable, "_distribution_density.pdf"), gg1, width = 8, height = 6)
+  
+  fig_stats[["zone"]][[variable]] <- gg1
+  
+  
+  test_a_b <- wilcox.test(area_a, area_b)
+  test_a_c <- wilcox.test(area_a, area_c)
+  test_b_c <- wilcox.test(area_b, area_c)
+  
+  
+  df_wilcox[[variable]] <- data.frame(
+    Area1 = c("Rhine", "Rhine", "Lazio"),
+    Area2 = c("Lazio", "Kurdistan", "Kurdistan"),
+    variable = variable,
+    p_value = c(test_a_b$p.value, test_a_c$p.value, test_b_c$p.value),
+    result = c(ifelse(test_a_b$p.value < 0.05, "Significant", "Not significant"),
+               ifelse(test_a_c$p.value < 0.05, "Significant", "Not significant"),
+               ifelse( test_b_c$p.value < 0.05, "Significant", "Not significant"))
+  ) 
+
+}
+```
+
+```{r areas density plots APM pre-process hide, echo= FALSE}
+load("../data/derived_data/save/Figure_APM_pre-process_stats.RData")
+
+plots <- fig_stats$zone
+
+for (i in 1:length(plots)) {
+  plot(plots[[i]])
+}
+
+```
+
+```{r areas density plots stats APM pre-process, eval= FALSE}
+test <- do.call(rbind, df_wilcox)
+test$p_value  <- formatC(test$p_value, format = "f", digits = 3)
+
+write.table(test, "./analysis/data/derived_data/pre_process/statistics/zones/Wilcox_test.txt")
+
+test$result <- ifelse(test$result == "Significant",
+                            cell_spec(test$result, "html", background = "lightgreen"),
+                            as.character(test$result))
+
+kable(test, "html", escape = FALSE) %>% 
+  kable_styling(full_width = TRUE)  
+```
+
+```{r areas density plots stats APM pre-process hide, eval= FALSE}
+
+test <- read.table("../data/derived_data/pre_process/statistics/zones/Wilcox_test.txt")
+
+test$result <- ifelse(test$result == "Significant",
+                            cell_spec(test$result, "html", background = "lightgreen"),
+                            as.character(test$result))
+
+kable(test, "html", escape = FALSE) %>% 
+  kable_styling(full_width = TRUE)  
+
+```
+
+This is an overview of all the covariates distribution for each areas
+
+```{r cov graphcial abstract APM pre-process, eval= FALSE}
+# 03 Compute the graphical overview of the background ##########################
+
+# 9 per page in pdf
+for (area in areas) {
+  
+  # Set a reasonable PDF size (9x6 inches)
+  pdf(file.path("data/derived_data/pre_process",
+                paste0(area,"_graphical_overview.pdf")),
+      width = 10, height = 10,  # Width and height in inches
+      bg = "white",          # Background color
+      colormodel = "cmyk")   # Color model )
+  
+  # Get number of predictor layers
+  n_layers <- dim(predictors[[area]])[3]
+  
+  # Loop through layers 16 at a time
+  for (start_idx in seq(1, n_layers, by = 9)) {
+    
+    # Define the plotting layout
+    par(mfrow = c(3,3), mar = c(2, 2, 3, 1))
+    
+    # Determine which layers go on this page
+    end_idx <- min(start_idx + 8, n_layers)
+    
+    for (i in start_idx:end_idx) {
+      # Plot the layer
+      plot(predictors[[area]][[i]],
+           main = names(predictors[[area]])[i],
+           axes = FALSE, box = FALSE)
+    }
+  }
+  
+  dev.off()
+}
+
+# All in one in png
+for (area in areas) {
+  
+  # Get number of predictor layers
+  n_layers <- dim(predictors[[area]])[3]
+  
+  # Compute layout size automatically (closest square grid)
+  n_cols <- ceiling(sqrt(n_layers))
+  n_rows <- ceiling(n_layers / n_cols)
+  
+  # Define output file path
+  png(file.path("data/derived_data/pre_process",
+                paste0(area,"_graphical_overview.png")),
+      width = 300 * n_cols, height = 300 * n_rows, res = 100)
+  
+  # Layout and margins
+  par(mfrow = c(n_rows, n_cols), mar = c(2, 2, 3, 1))
+  
+  # Loop through all layers and plot
+  for (i in 1:n_layers) {
+    plot(predictors[[area]][[i]],
+         main = names(predictors[[area]])[i],
+         axes = FALSE, box = FALSE)
+  }
+  
+  dev.off()
+}
+```
+
+```{r cov graphcial abstract APM pre-process hide, echo=FALSE, out.width="100%", fig.align="center", warning=FALSE, message=FALSE}
+knitr::include_graphics("../data/derived_data/pre_process/Rhine_graphical_overview.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/Lazio_graphical_overview.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/Shephelah_graphical_overview.png")
+
+knitr::include_graphics("../data/derived_data/pre_process/Kurdistan_graphical_overview.png")
+```
+
+### Extract and prepare the covariates
+
+#### Compare sites from both periods between them
+
+After we performed a statistical comparison between the region we extracted the covariates values at Bronze Age sites locations anc ompared it with Iron Age sites. We computed a basic statistical overview and a [Wilcoxon Mann-Whitney test](#stat-test)
+
+```{r extract cov APM pre-process, eval= FALSE}
+# 04 Extract variables #########################################################
+
+load("./analysis/data/derived_data/save/Sites_filter.RData")
+
+sites <- list("Rhine" = Rhine_all[,c(1,4,22,23)], "Lazio" = Lazio_all[,c(1,2,12,13)], 
+              "Shephelah" = Shephelah_all[,c(2,26:28)], "Kurdistan" = Kurdistan_all[,c(2,3,13,14)])
+
+# 4.1 Extract variables for positive sites =====================================
+
+sites_with_cov <- list()
+
+# Remove NA and join site
+for (area in areas) {
+  sf[[area]] <- na.omit(sf[[area]])
+  sites_with_cov[[area]] <- st_join(sites[[area]], sf[[area]])
+  sites_with_cov[[area]]$era[sites_with_cov[[area]]$era == "Bronze"] <- "BA"
+  sites_with_cov[[area]]$era[sites_with_cov[[area]]$era == "Iron"] <- "IA"
+  print(sum(is.na(sites_with_cov[[area]]) == TRUE))
+}
+
+# Absence in the Lazio dataset is for the toponymes
+
+cov_sites <- list()
+
+for (area in areas) {
+  
+  for (era in eras) {
+    cov_name <- c(paste0(era,"_bio03"), paste0(era,"_bio12"), paste0(era,"_bio15"), paste0(era,"_bio16"))
+    df_cov <- st_drop_geometry(sites_with_cov[[area]])
+    coords <- st_coordinates(sites_with_cov[[area]])
+    df_cov$X <- coords[, "X"]
+    df_cov$Y <- coords[, "Y"]
+    df_cov <- df_cov[df_cov$era == era,]
+    cov_sites[[area]][[era]] <- df_cov[,c(2,15:length(df_cov)-2)]
+    cov_era <-  df_cov[cov_name]
+    colnames(cov_era) <- c("Bio03", "Bio12", "Bio15", "Bio16")
+    cov_sites[[area]][[era]] <- cbind(df_cov[,c(length(df_cov)-1,length(df_cov))], cov_sites[[area]][[era]], cov_era)
+    write.csv(cov_sites[[area]][[era]], paste0("./analysis/data/raw_data/inputs/", area, "_sites_cov_for_", era,".csv"))
+  }
+}
+
+# 4.2 Compute basic statistics =================================================
+
+summary_numeric_df <- function(data) {
+  num_data <- data[, sapply(data, is.numeric), drop = FALSE]
+  
+  stats <- t(sapply(num_data, function(x) {
+    x_no_na <- x[!is.na(x)]
+    c(NAs = sum(is.na(x)),
+      Mean = mean(x_no_na, na.rm = TRUE),
+      SD = sd(x_no_na, na.rm = TRUE),
+      Min = min(x_no_na, na.rm = TRUE),
+      Q1 = quantile(x_no_na, 0.25, na.rm = TRUE),
+      Median = median(x_no_na, na.rm = TRUE),
+      Q3 = quantile(x_no_na, 0.75, na.rm = TRUE),
+      Max = max(x_no_na, na.rm = TRUE)
+    )
+  }))
+  
+  df_out <- as.data.frame(stats)
+  
+  df_out[] <- lapply(df_out, function(x) if (is.numeric(x)) round(x, 3) else x)
+  
+  df_out
+}
+
+df_summary <- list()
+
+for (area in areas) {
+  for (era in eras) {
+    df_summary[[area]][[era]] <- summary_numeric_df(cov_sites[[area]][[era]][,-c(1:2)])
+    write.table(df_summary[[area]][[era]], paste0("./analysis/data/derived_data/pre_process/statistics/sites/",area,"_sites_stats_for_",era,".txt"))
+  }
+  
+}
+
+
+# 4.3 Compute Wilcox test BA vs. IA ============================================
+
+df_wilcox <- list()
+
+for (area in areas) {
+  site_BA <- cov_sites[[area]][["BA"]][-1]
+  site_IA <- cov_sites[[area]][["IA"]][-1]
+  
+  names <- colnames(site_BA[,-c(1:2)])
+
+  for (variable in names) {
+    
+    cov_BA <- as.numeric(site_BA[[variable]])
+    cov_IA <- as.numeric(site_IA[[variable]])
+    
+    test <- wilcox.test(cov_BA, cov_IA)
+    
+    df_wilcox[[area]][[variable]] <- data.frame(
+      Area = area,
+      variable = variable,
+      p_value = c(test$p.value),
+      result = c(ifelse(test$p.value < 0.05, "Significant", "Not significant"))
+    )
+  }
+}  
+
+
+Rhine_test <- do.call(rbind, df_wilcox[["Rhine"]])
+Lazio_test <- do.call(rbind, df_wilcox[["Lazio"]])
+Shephelah_test <- do.call(rbind, df_wilcox[["Shephelah"]])
+Kurdistan_test <- do.call(rbind, df_wilcox[["Kurdistan"]])
+
+Final_test <- rbind(Rhine_test, Lazio_test, Shephelah_test, Kurdistan_test)
+row.names(Final_test) <- c(1:nrow(Final_test))
+Final_test$p_value  <- formatC(Final_test$p_value, format = "f", digits = 3)
+
+write.table(Final_test, "./analysis/data/derived_data/pre_process/statistics/sites/Wilcox_test_sites_vs_sites.txt")
+
+
+Final_test$result <- ifelse(Final_test$result == "Significant",
+                    cell_spec(Final_test$result, "html", background = "lightgreen"),
+                    as.character(Final_test$result))
+
+kable(Final_test, "html", escape = FALSE) %>% 
+  kable_styling(full_width = TRUE)
+```
+
+```{r extract cov APM pre-process hide, echo= FALSE}
+library(kableExtra)
+
+Final_test <- read.table("../data/derived_data/pre_process/statistics/sites/Wilcox_test_sites_vs_sites.txt")
+
+
+Final_test$result <- ifelse(Final_test$result == "Significant",
+                    cell_spec(Final_test$result, "html", background = "lightgreen"),
+                    as.character(Final_test$result))
+
+kable(Final_test, "html", escape = FALSE) %>% 
+  kable_styling(full_width = TRUE)
+
+```
+
+#### Compare sites to background 
+
+After comparing sites from both periods we a comparing sites to "non-sites" with the background values.
+
+```{r extract cov sites vs. background APM pre-process, eval= FALSE}
+# 4.4 Compute Wilcox test sites vs. background =================================
+
+df_wilcox <- list()
+
+for (area in areas) {
+
+  for (era in eras) {
+    names <- colnames(cov_sites[[area]][[era]][,-c(1:3)])
+    sites_era <- cov_sites[[area]][[era]][,-c(1:3)]
+    
+    cov_name <- c(paste0(era,"_bio03"), paste0(era,"_bio12"), paste0(era,"_bio15"), paste0(era,"_bio16"))
+    cov_era <- cov[[area]][cov_name]
+    colnames(cov_era) <- c("Bio03", "Bio12", "Bio15", "Bio16")
+    cov_era <- cbind(cov[[area]][,c(9:length(cov[[area]]))], cov_era)
+    
+    for (variable in names) {
+      n_sample <- 20000 
+      set.seed(2025)
+      cov_background <- as.numeric(cov_era[[variable]])
+      cov_background <- sample(na.omit(cov_background), n_sample)
+      
+      cov_sites_era <- as.numeric(sites_era[[variable]])
+      
+      test <- wilcox.test(cov_sites_era, cov_background)
+      
+      df_wilcox[[area]][[era]][[variable]] <- data.frame(
+        Area = area,
+        Era = era,
+        variable = variable,
+        p_value = c(test$p.value),
+        result = c(ifelse(test$p.value < 0.05, "Significant", "Not significant"))
+      )
+    }
+  }
+  
+}  
+
+
+Rhine_BA_test <- do.call(rbind, df_wilcox[["Rhine"]][["BA"]])
+Rhine_IA_test <- do.call(rbind, df_wilcox[["Rhine"]][["IA"]])
+Lazio_BA_test <- do.call(rbind, df_wilcox[["Lazio"]][["BA"]])
+Lazio_IA_test <- do.call(rbind, df_wilcox[["Lazio"]][["IA"]])
+Shephelah_BA_test <- do.call(rbind, df_wilcox[["Shephelah"]][["BA"]])
+Shephelah_IA_test <- do.call(rbind, df_wilcox[["Shephelah"]][["IA"]])
+Kurdistan_BA_test <- do.call(rbind, df_wilcox[["Kurdistan"]][["BA"]])
+Kurdistan_IA_test <- do.call(rbind, df_wilcox[["Kurdistan"]][["IA"]])
+
+Final_test <- rbind(Rhine_BA_test, Lazio_BA_test, Shephelah_BA_test, Kurdistan_BA_test,
+                    Rhine_IA_test, Lazio_IA_test, Shephelah_IA_test, Kurdistan_IA_test)
+row.names(Final_test) <- c(1:nrow(Final_test))
+Final_test$p_value  <- formatC(Final_test$p_value, format = "f", digits = 3)
+
+write.table(Final_test, "./analysis/data/derived_data/pre_process/statistics/sites/Wilcox_test_sites_vs_background.txt")
+
+Final_test$result <- ifelse(Final_test$result == "Significant",
+                            cell_spec(Final_test$result, "html", background = "lightgreen"),
+                            as.character(Final_test$result))
+
+kable(Final_test, "html", escape = FALSE) %>% 
+  kable_styling(full_width = TRUE)  
+```
+
+```{r extract cov sites vs. background APM pre-process hide, echo= FALSE}
+
+
+Final_test <- read.table("../data/derived_data/pre_process/statistics/sites/Wilcox_test_sites_vs_background.txt")
+
+
+Final_test$result <- ifelse(Final_test$result == "Significant",
+                    cell_spec(Final_test$result, "html", background = "lightgreen"),
+                    as.character(Final_test$result))
+
+kable(Final_test, "html", escape = FALSE) %>% 
+  kable_styling(full_width = TRUE)
+
+```
+
+### Visualisation of each areas variable distribution
+
+To reduce computation time we used only a subset of **20,000** values when ploting background values.
+
+```{r extract cov visual APM pre-process, eval = FALSE}
+# 05 Visualisations ############################################################
+# 5.1 Density plot for sites and background combined ===========================
+
+#Extract names of the variables
+names <- colnames(cov[["Rhine"]])
+cov_sites <- list()
+
+#Extract background and sites (BA and IA) values
+for(area in areas){
+  
+  #Extract sites points
+  sf[[area]] <- na.omit(sf[[area]])
+  sites_with_cov[[area]] <- st_join(sites[[area]], sf[[area]])
+  sites_with_cov[[area]]$era[sites_with_cov[[area]]$era == "Bronze"] <- "BA"
+  sites_with_cov[[area]]$era[sites_with_cov[[area]]$era == "Iron"] <- "IA"
+  print(sum(is.na(sites_with_cov[[area]]) == TRUE))
+  
+  #Extract all values of sites
+  
+  for (era in eras) {
+    cov_name <- c(paste0(era,"_bio03"), paste0(era,"_bio12"), paste0(era,"_bio15"), paste0(era,"_bio16"))
+    df_cov <- st_drop_geometry(sites_with_cov[[area]])
+    df_cov <- df_cov[df_cov$era == era,]
+    cov_sites[[area]][[era]] <- df_cov[,c(2,13:length(df_cov))]
+    cov_era <-  df_cov[cov_name]
+    colnames(cov_era) <- c(paste0(era,"_bio03"), paste0(era,"_bio12"), paste0(era,"_bio15"), paste0(era,"_bio16"))
+    cov_sites[[area]][[era]] <- cbind(cov_sites[[area]][[era]], cov_era)
+  }
+  
+  # Divide values in BA and IA
+  BA_vals <- cov_sites[[area]]$BA
+  IA_vals <- cov_sites[[area]]$IA
+  
+  #Extract variables values for background and sites 
+  for (variable in names) {
+    
+    if(area == "Shephelah" && (variable == "River_cost_permanent" || variable == "River_cost_seasonal")){
+      next
+    }
+    
+    background_variable <- cov[[area]][[variable]]
+    n_sample <- 20000 # To reduce computation time
+    set.seed(2025)
+    background_values <- sample(na.omit(background_variable), n_sample)
+    
+    if (variable %in% names(IA_vals) && variable %in% names(BA_vals)) {
+      
+      IA_var_val <- IA_vals[[variable]]
+      BA_var_val <- BA_vals[[variable]]
+      
+    } else if (variable %in% names(IA_vals)) {
+      
+      IA_var_val <- IA_vals[[variable]]
+      BA_var_val <- NULL
+      
+    } else if (variable %in% names(BA_vals)) {
+      
+      IA_var_val <- NULL
+      BA_var_val <- BA_vals[[variable]]
+      
+    } 
+    
+    #Create df for plotting
+    df <- data.frame(
+      value = c(background_values, IA_var_val, BA_var_val),
+      zone = factor(c(
+        rep("Background", length(background_values)),
+        rep("IA", length(IA_var_val)),
+        rep("BA", length(BA_var_val))
+      ), levels = c("Background", "IA", "BA"))
+    )
+    
+    # Plot results
+    if (variable %in% c("TPI", "Aspect")) {
+      
+      gg1 <- ggplot(df, aes(x = value, fill = zone)) +
+        geom_histogram(bins = 30, alpha = 0.8, color = "black") +
+        facet_wrap(~zone, ncol = 1, scales = "free_y") +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5),
+          legend.position = "none"
+        )
+      
+    } else {
+      # Density plot for other variables
+      gg1 <- ggplot(df, aes(x = value, fill = zone)) +
+        geom_density(alpha = 0.3) +
+        labs(
+          title = paste0(variable, " distribution in ", area),
+          x = "Values",
+          y = "Density"
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5),
+          legend.title = element_blank()
+        )
+    }
+    
+    # save plot
+    ggsave(filename = file.path("data/derived_data/pre_process/statistics/sites",
+          paste0(area, "_", variable,"_bg_vs_sites.png")),
+          plot = gg1, width = 8, height = 5, dpi = 300)
+    
+    ggsave(filename = file.path("data/derived_data/pre_process/statistics/sites",
+                                 paste0(area, "_", variable,"_bg_vs_sites.pdf")),
+            plot = gg1, width = 8, height = 5)
+    
+    fig_stats[[area]][[variable]] <- gg1
+    
+  }
+}
+
+save(fig_stats, file = "./analysis/data/derived_data/save/Figure_APM_pre-process_stats.RData")
+```
+
+
+#### Rhine Valley
+
+```{r extract cov visual APM pre-process hide Rhine, echo= FALSE}
+plots <- fig_stats$Rhine
+
+for (i in 1:length(plots)) {
+  plot(plots[[i]])
+}
+
+```
+
+#### Lazio area
+
+```{r extract cov visual APM pre-process hide Lazio, echo= FALSE}
+plots <- fig_stats$Lazio
+
+for (i in 1:length(plots)) {
+  plot(plots[[i]])
+}
+
+```
+
+#### Shephelah area
+
+```{r extract cov visual APM pre-process hide Shephelah, echo= FALSE}
+plots <- fig_stats$Shephelah
+
+for (i in 1:length(plots)) {
+  plot(plots[[i]])
+}
+
+```
+
+#### Kurdistan area
+
+```{r extract cov visual APM pre-process hide Kurdistan, echo= FALSE}
+plots <- fig_stats$Kurdistan
+
+for (i in 1:length(plots)) {
+  plot(plots[[i]])
+}
+
+```
+
+#### Correlation plots
+
+We also computed a correlation plot with only site presence values for continuous data.
+
+```{r corrplot APM pre-process, eval = FALSE}
+
+# 5.2 Correlation for Maxent (positive only) ===================================
+
+for (area in areas) {
+ 
+  if (area == "Shephelah") {
+    
+    for (era in eras) {  
+      pdf(paste0("./analysis/data/derived_data/pre_process/",area, "_corrplot_for_", era, ".pdf"),    # File name
+          width = 10, height = 10,  # Width and height in inches
+          bg = "white",          # Background color
+          colormodel = "cmyk")   # Color model 
+      
+      # Correlation of the data (removed discrete variables)
+      corrplot(cor(cov_sites[[area]][[era]][,-c(1,3,11)]),  method = "color", col = viridis(200), 
+               type = "upper", 
+               addCoef.col = "black", # Add coefficient of correlation
+               tl.col = "black", tl.srt = 45, # Text label color and rotation
+               number.cex = 0.7, # Size of the text labels
+               cl.cex = 0.7) # Size of the color legend text
+      
+      dev.off()
+    }
+  } else {
+    
+    for (era in eras) {  
+      pdf(paste0("./analysis/data/derived_data/pre_process/",area, "_corrplot_for_", era, ".pdf"),    # File name
+          width = 10, height = 10,  # Width and height in inches
+          bg = "white",          # Background color
+          colormodel = "cmyk")   # Color model 
+      
+      # Correlation of the data (removed discrete variables)
+      corrplot(cor(cov_sites[[area]][[era]][,-c(1,3, 13)]),  method = "color", col = viridis(200), 
+               type = "upper", 
+               addCoef.col = "black", # Add coefficient of correlation
+               tl.col = "black", tl.srt = 45, # Text label color and rotation
+               number.cex = 0.7, # Size of the text labels
+               cl.cex = 0.7) # Size of the color legend text
+      
+      dev.off()
+    }
+  }
+}
+
+```
+
+
+```{r corrplot APM pre-process hide, echo=FALSE, warning=FALSE, message=FALSE}
+library(corrplot)
+library(viridis)
+library(ggplot2)
+
+eras <- c("BA", "IA")
+areas <- c("Rhine", "Lazio", "Shephelah", "Kurdistan")
+
+for (area in areas) {
+ 
+  if (area == "Shephelah") {
+    
+    for (era in eras) {  
+      # Correlation of the data (removed discrete variables)
+      corrplot(cor(cov_sites[[area]][[era]][,-c(1,3,11)]),  method = "color", col = viridis(200), 
+               type = "upper", 
+               addCoef.col = "black", # Add coefficient of correlation
+               title = paste0(area," corrplot for ", era),
+               tl.col = "black", tl.srt = 45, # Text label color and rotation
+               number.cex = 0.5, # Size of the text labels
+               cl.cex = 0.5) # Size of the color legend text
+    }
+  } else {
+    
+    for (era in eras) {  
+      
+      # Correlation of the data (removed discrete variables)
+      corrplot(cor(cov_sites[[area]][[era]][,-c(1,3, 13)]),  method = "color", col = viridis(200), 
+               type = "upper", 
+               addCoef.col = "black", # Add coefficient of correlation
+               title = paste0(area," corrplot for ", era),
+               tl.col = "black", tl.srt = 45, # Text label color and rotation
+               number.cex = 0.5, # Size of the text labels
+               cl.cex = 0.5) # Size of the color legend text
+    }
+  }
+}
+
+```
+
+
+## APM model
+
+### Preparation of the pseudo absences
+
+```{r setup APM model, echo=FALSE, warning=FALSE, message=FALSE}
+library(pacman)
+pacman::p_unload(pacman::p_loaded(), character.only = TRUE)
+```
+
+```{r env APM model, eval= FALSE}
+
+# 0 Environment setup ##########################################################
+
+# 0.1 Prepare environment ======================================================
+
+# Folder check
+getwd()
+
+# Clean up workspace
+rm(list=ls())
+
+# 0.2 Install packages =========================================================
+
+install.packages("pacman")        
+#Install and load the "pacman" package (allow easier download of packages)
+library(pacman)
+pacman::p_load(sf, ggplot2, cli, mapview, readr, usdm, corrplot, doParallel, SDMtune, zeallot, dismo, rJava, patchwork, 
+               terra, grid, gridExtra, blockCV, rasterVis, colorspace)
+
+# 0.3 Show session infos =======================================================
+
+sessionInfo()
+```
+
+```
+R version 4.6.0 (2026-04-24)
+Platform: x86_64-pc-linux-gnu
+Running under: EndeavourOS
+
+Matrix products: default
+BLAS:   /usr/lib/libblas.so.3.12.0 
+LAPACK: /usr/lib/liblapack.so.3.12.0  LAPACK version 3.12.0
+
+locale:
+ [1] LC_CTYPE=fr_FR.UTF-8       LC_NUMERIC=C               LC_TIME=fr_FR.UTF-8        LC_COLLATE=fr_FR.UTF-8     LC_MONETARY=fr_FR.UTF-8   
+ [6] LC_MESSAGES=fr_FR.UTF-8    LC_PAPER=fr_FR.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=fr_FR.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Europe/Paris
+tzcode source: system (glibc)
+
+attached base packages:
+[1] grid      parallel  stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] colorspace_2.1-2  kableExtra_1.4.0  dplyr_1.2.1       DT_0.34.0         rasterVis_0.51.7  lattice_0.22-9    blockCV_3.2-0     gridExtra_2.3    
+ [9] patchwork_1.3.2   rJava_1.0-18      dismo_1.3-16      raster_3.6-32     sp_2.2-1          zeallot_0.2.0     SDMtune_1.3.3     doParallel_1.0.17
+[17] iterators_1.0.14  foreach_1.5.2     corrplot_0.95     usdm_2.1-7        terra_1.9-27      readr_2.2.0       mapview_2.11.4    cli_3.6.6        
+[25] ggplot2_4.0.3     sf_1.1-1         
+
+loaded via a namespace (and not attached):
+ [1] tidyselect_1.2.1    viridisLite_0.4.3   farver_2.1.2        S7_0.2.2            fastmap_1.2.0       leaflet_2.2.3       pacman_0.5.1       
+ [8] digest_0.6.39       lifecycle_1.0.5     magrittr_2.0.5      compiler_4.6.0      sass_0.4.10         rlang_1.2.0         tools_4.6.0        
+[15] yaml_2.3.12         knitr_1.51          labeling_0.4.3      htmlwidgets_1.6.4   interp_1.1-6        classInt_0.4-11     xml2_1.5.2         
+[22] RColorBrewer_1.1-3  pkgload_1.5.2       KernSmooth_2.23-26  withr_3.0.2         stats4_4.6.0        latticeExtra_0.6-31 e1071_1.7-17       
+[29] leafem_0.2.5        scales_1.4.0        rmarkdown_2.31      generics_0.1.4      otel_0.2.0          rstudioapi_0.18.0   tzdb_0.5.0         
+[36] cachem_1.1.0        DBI_1.3.0           proxy_0.4-29        stringr_1.6.0       base64enc_0.1-6     vctrs_0.7.3         jsonlite_2.0.0     
+[43] hms_1.1.4           systemfonts_1.3.2   jpeg_0.1-11         crosstalk_1.2.2     jquerylib_0.1.4     hexbin_1.28.5       units_1.0-1        
+[50] glue_1.8.1          codetools_0.2-20    stringi_1.8.7       gtable_0.3.6        deldir_2.0-4        tibble_3.3.1        pillar_1.11.1      
+[57] htmltools_0.5.9     satellite_1.0.6     R6_2.6.1            textshaping_1.0.5   evaluate_1.0.5      png_0.1-9           bslib_0.10.0       
+[64] class_7.3-23        Rcpp_1.1.1-1.1      svglite_2.2.2       xfun_0.57           zoo_1.8-15          pkgconfig_2.0.3      
+```
+
+We are creating a total of 10,000 pseudo-absence point with two different seed generation following an `hexagonal` sampling with a buffer of **500 m** around each sites. The mapview visualisation was retained from the supplementary file to reduce the size of the file.
+
+```{r data prepation of APM model, eval= FALSE}
+
+# 01 Import data sets ##########################################################
+eras <- c("BA", "IA")
+areas <- c("Rhine", "Lazio", "Shephelah", "Kurdistan")
+projections <- list(Rhine = "EPSG:32632", Lazio = "EPSG:32633", Shephelah = "EPSG:32636", Kurdistan = "EPSG:32638")
+
+cov_sites <- list()
+
+for (area in areas) {
+  for (era in eras) {
+   cov <-  read.csv(paste0("./analysis/data/raw_data/inputs/", area,"_sites_cov_for_", era,".csv"))
+   cov_sites[[area]][[era]] <- cov[,-1]
+  }
+}
+
+sf <- list()
+
+for (area in areas) {
+  sf[[area]] <- st_read("./analysis/data/raw_data/covariates/Hex_grid.gpkg", layer = paste0(area, "_covariates"))
+}
+
+# 01.1 Create the pseudo-absence points ========================================
+PA_Maxent <- list()
+
+for (area in areas) {
+  for (era in eras) {
+    sites <- st_as_sf(cov_sites[[area]][[era]], coords = c("X", "Y"), crs = projections[[area]])
+    sites_buffer <- st_buffer(sites, dist = 500)
+    buffer_union <- st_union(sites_buffer)
+    mask <- st_difference(sf[[area]], buffer_union)
+    
+    set.seed(1070)
+    pa.1 <- st_sample(mask, size = 10000, type = "hexagonal")
+    pa.1_sf <- st_as_sf(pa.1)
+    coords <- st_coordinates(pa.1_sf$x)
+    PA.1 <- as.data.frame(coords)
+    
+    set.seed(2070)
+    pa.2 <- st_sample(mask, size = 10000, type = "hexagonal")
+    pa.2_sf <- st_as_sf(pa.2)
+    coords <- st_coordinates(pa.2_sf$x)
+    PA.2 <- as.data.frame(coords)
+    
+    PA_Maxent[[area]][[era]] <- list("PA.1" = PA.1,
+                             "PA.2" = PA.2)
+  }
+}
+
+
+# 01.2 Plot the absence and presences ==========================================
+
+for (area in areas) {
+  for (era in eras) {
+    presence <- as.data.frame(cov_sites[[area]][[era]])
+    colnames(presence) <- names(cov_sites[[area]][[era]])
+    absence.1 <- as.data.frame(PA_Maxent[[area]][[era]]$PA.1)
+    absence.2 <- as.data.frame(PA_Maxent[[area]][[era]]$PA.2)
+    
+    # Extract response variable and coordinates for training data
+    
+    presence_sf <- st_as_sf(presence, coords = c("X", "Y"), crs = projections[[area]]) 
+    absence.1_sf <- st_as_sf(absence.1, coords = c("X", "Y"), crs = projections[[area]])
+    absence.2_sf <- st_as_sf(absence.2, coords = c("X", "Y"), crs = projections[[area]]) 
+    
+    mapview(presence_sf, layer.name = paste0("Sites ", era), col.regions = "lightgreen", cex = 5) + 
+    mapview(absence.1_sf, layer.name = paste0("Sites absence 1 ", era), col.regions = "red", cex = 2) +
+    mapview(absence.2_sf, layer.name = paste0("Sites absence 2 ", era), col.regions = "orange", cex = 2)
+  }
+}
+```
+
+We can now extract the covariates values at each PA location.
+
+```{r cov extraction APM model, eval= FALSE}
+# 01.3 Extract pseudo-absence covariates =======================================
+
+cov_pa <- list()
+
+for (area in areas) {
+  for (era in eras) {
+    cov_name <- c(paste0(era,"_bio03"), paste0(era,"_bio12"), paste0(era,"_bio15"), paste0(era,"_bio16"))
+    PA <- list()
+    
+    for (i in 1:2) {
+      pa_sf <- st_as_sf(PA_Maxent[[area]][[era]][[i]], coords = c("X", "Y"), crs = projections[[area]])
+      pa_cov <- st_join(pa_sf, sf[[area]])
+      df_cov <- st_drop_geometry(pa_cov)
+      PA[[i]] <- df_cov[,c(1,10:length(df_cov))]
+      cov_era <-  df_cov[cov_name]
+      colnames(cov_era) <- c("Bio03", "Bio12", "Bio15", "Bio16")
+      PA[[i]] <- cbind(PA[[i]], cov_era)
+    }
+    pa.1 <- cbind(PA_Maxent[[area]][[era]][[1]], PA[[1]])
+    pa.2 <- cbind(PA_Maxent[[area]][[era]][[2]], PA[[2]])
+    pa.1$pa <- 1
+    pa.2$pa <- 2
+    df_pa <- rbind(pa.1, pa.2)
+    df_pa <- na.omit(df_pa)
+    write_delim(df_pa, paste0("./analysis/data/raw_data/inputs/", area, "_PA_cov_",era,".csv"), delim = ";")
+    
+    cov_pa[[area]][[era]] <- list(
+      "PA.1" = df_pa[df_pa$pa == 1, !(names(df_pa) %in% "pa")],
+      "PA.2" = df_pa[df_pa$pa == 2, !(names(df_pa) %in% "pa")]
+    )
+  }
+}
+
+
+save(cov_sites, cov_pa, PA_Maxent, file = "./analysis/data/derived_data/save/PA_APM.RData")
+
+rm(list=setdiff(ls(), c("eras", "areas", "projections")))
+```
+
+### Feature selection
+
+We decided to use a variable importance feature extraction (VIF) to reduce the autocorrelation of the variables and improve model robustness. The threshold was set at **0.7**. We also performed a model running without any VIF selection in order to allow better comparison between areas. However, we did not evaluated the results of this second run.
+
+```{r features extraction APM model, eval= FALSE}
+# 02 Feature selection #########################################################
+
+# 02.1 Realise the VIF =========================================================
+
+load("./analysis/data/derived_data/save/PA_APM.RData")
+
+for (area in areas) {
+  for (era in eras) {
+    presence <- cov_sites[[area]][[era]]
+    presence <- presence[,-c(1:3)]
+    PA.1 <- cov_pa[[area]][[era]]$PA.1[,-c(1:3)]
+    PA.2 <- cov_pa[[area]][[era]]$PA.2[,-c(1:3)]
+    points <- rbind(presence, PA.1, PA.2)
+    
+    vif <- vifcor(points[,-c(2,12)], th=0.7)
+    print(vif)
+    cat(area, "excluded variables for", era,":", vif@excluded)
+    vif_df <- as.data.frame(vif@results)
+    vif_plot <- ggplot(vif_df, aes(x = reorder(Variables, VIF), y = VIF)) +
+      geom_bar(stat = "identity", fill = "lightblue") +
+      coord_flip() +
+      theme_minimal() +
+      labs(title = paste0(area," VIF values for ", era, " period"), x = "Variables", y = "VIF") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    vif_plot
+    
+    ggsave(paste0("./analysis/data/derived_data/pre_process/VIF/VIF_",area, "_", era,".png"), vif_plot, width = 12, height = 8)
+    ggsave(paste0("./analysis/data/derived_data/pre_process/VIF/VIF_",area, "_", era,".pdf"), vif_plot, width = 12, height = 8)
+    
+    write.table(vif_df, paste0("./analysis/data/derived_data/pre_process/VIF/VIF_",area, "_", era,".txt"))
+  }
+}
+
+
+# 02.2 Human validation =========================================================
+
+# Leave this part empty for now
+
+rm(list=setdiff(ls(), c("areas", "eras", "projections")))
+```
+
+```{r features extraction APM hide, echo= FALSE}
+eras <- c("BA", "IA")
+areas <- c("Rhine", "Lazio", "Shephelah", "Kurdistan")
+
+for (area in areas) {
+  for (era in eras) {
+vif_table <- read.table(paste0("../data/derived_data/pre_process/VIF/VIF_",area, "_", era,".txt"))
+vif_table
+
+knitr::include_graphics(paste0("../data/derived_data/pre_process/VIF/VIF_",area, "_", era,".png"))
+
+  }
+}
+
+```
+
+### Model runs
+
+We used the `SDMtune` package with the `BlockCV` function to reduce spatial autocorrelation and runed the MaxEnt twice with two different seeds for each iteration. We used a `cv_spatial_autocor` function to see spatial variables correlation. For the seed we also added for **IA** a variation of +1000 as previous computing resulted in overfitting valdiation results.
+
+```{r model runs APM model, eval= FALSE}
+# 03 Maxent modelling ##########################################################
+
+# 03.1 Prepare the data ========================================================
+load("./analysis/data/derived_data/save/PA_APM.RData")
+seeds <- c(1070,2707)
+
+predictors <- list()
+
+for (area in areas) {
+  predictors[[area]]  <- rast(paste0("./analysis/data/raw_data/covariates/",area,"_covariates.tif"))   
+}
+
+# 03.2 Format the data ========================================================
+
+cli_progress_bar(
+  format = "MaxEnt {.val {area}} for {.val {era}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+  total = 8, 
+  clear = FALSE
+)
+
+for (area in areas) {
+  for (era in eras) {
+  
+  Maxent_models <- list("PA.1" = NA, 
+                        "PA.2" = NA)
+
+  #Extract predictors of area and select the period ones
+  predictors_final <- predictors[[area]]
+  
+  if (era == "BA"){
+    predictors_final <- predictors_final[[-c(5,6,7,8)]]
+  } else {
+    predictors_final <- predictors_final[[5:22]]
+  }
+  
+  if (area == "Levant") {
+    names(predictors_final) <- c(
+      "Bio03", "Bio12", "Bio15", "Bio16", 
+      "Aridity", "Aspect",
+      "River_cost",
+      "MSRM", "LSWI.1613", "LSWI.2202", "NDWI", "TCTW",
+      "Slope", "TPI", "TWI", "DEM"
+    )
+    
+  } else {names(predictors_final) <- c(
+    "Bio03", "Bio12", "Bio15", "Bio16", 
+    "Aridity", "Aspect",
+    "River_cost", "River_cost_permanent", "River_cost_seasonal",
+    "MSRM", "LSWI.1613", "LSWI.2202", "NDWI", "TCTW",
+    "Slope", "TPI", "TWI", "DEM"
+  )}
+  
+  # Erase predictors on base of VIF (this part has to be removed if NO VIF is performed)
+  filter <- read.table(paste0("./analysis/data/derived_data/pre_process/VIF/VIF_",area,"_",era,".txt"))
+  vars_to_keep <- unique(c(filter[,1], "TPI", "Aspect"))
+  idx <- which(names(predictors_final) %in% vars_to_keep)
+  predictors_final <- predictors_final[[idx]]
+  
+  tiff(paste0("./analysis/data/derived_data/pre_process/blocks/Blocks_",area, "_", era,".tiff"), width = 12*300, height = 8*300, res = 300) # Width and height in pixels
+  sac <- cv_spatial_autocor(predictors_final, progress = FALSE) 
+  dev.off()
+  
+  for (i in 1:2){
+    nb <- seeds[i]
+    ifelse(era == "IA", nb <- nb + 1000, NA)
+    
+    coords_all <- rbind(cov_sites[[area]][[era]][, c(1:2)], cov_pa[[area]][[era]][[i]][, c(1:2)])
+    data_all   <- rbind(cov_sites[[area]][[era]][, -c(1:3)], cov_pa[[area]][[era]][[i]][, -c(1:3)])
+    pa <- c(rep(1, nrow(cov_sites[[area]][[era]])), rep(0, nrow(cov_pa[[area]][[era]][[i]])))
+    data_all <- data_all[vars_to_keep]
+    
+    #Create a swd object to train MaxEnt model
+    data_swd <- new("SWD",
+                    species = era,
+                    coords  = coords_all,
+                    data    = data_all,
+                    pa      = as.numeric(pa))  
+    
+    #Create sf object to compute Blocks
+    data_sf <- cbind(coords_all,data_all,pa)
+    
+    data_sf <- st_as_sf(
+      data.frame(data_sf),
+      coords = c("X", "Y"),  # replace with your actual coordinate column names
+      crs = projections[[area]] # set correct CRS
+    )
+    
+    # 03.3 Split the data into blocks ===========================================
+  
+    kfolds <- cv_spatial(
+      x = data_sf,
+      column = "pa",
+      r = predictors_final,
+      size = sac$range, 
+      k = 4,
+      selection = "random",
+      iteration = 100,
+      hexagon = FALSE,
+      plot = FALSE,
+      progress = FALSE
+    )
+    
+    # Spatial blocks with sampling points
+    gg2 <- cv_plot(kfolds, x = data_sf)
+    ggsave(filename = paste0("./analysis/data/derived_data/pre_process/blocks/Folds_",area, "_", era,"_PA",i,".tiff"),
+           plot = gg2, width = 8, height = 6, dpi = 300, units = "in")
+    
+    rm(data_sf)
+    
+    # 03.4 Train a first model model ===========================================
+    
+    c(train_swd,test_swd) %<-% trainValTest(data_swd, 
+                                            test = 0.30, 
+                                            only_presence = TRUE, 
+                                            seed = nb)
+    
+    first_model <- train("Maxent", 
+                         data = train_swd,
+                         progress = FALSE)
+    
+    # 03.4.1 Tune with genetic algorithm =======================================
+    
+    h <- list(fc = c("l", "lq", "lh", "lqp", "lqph", "lqpht"),
+              reg = seq(0.2, 5, 0.2),
+              iter = c(500,1000,2000))
+    
+    
+    genetic <- optimizeModel(first_model, 
+                             hypers = h, 
+                             metric = "auc", 
+                             test = test_swd,
+                             pop = 20, 
+                             gen = 5,
+                             keep_best = 0.4,
+                             keep_random = 0.2,
+                             mutation_chance = 0.4,
+                             interactive = FALSE,
+                             progress = FALSE,
+                             seed = nb)
+    
+    # 03.4.2 Select best parameters and train final model ============================
+    
+    final_model <- combineCV(genetic@models[[which.max(genetic@results$test_AUC)]])
+    
+    # Final model training
+    final_model <- train("Maxent", 
+                         data = data_swd, 
+                         fc = final_model@model@fc , 
+                         reg = final_model@model@reg,
+                         folds = kfolds,
+                         progress = FALSE)
+    
+    # Save the run
+    Maxent_models[[i]] <- c("data"= data, 
+                            "first_model" = first_model, 
+                            "genetic" = genetic, 
+                            "final_model" = final_model, 
+                            "train" = train_swd, 
+                            "test" = test_swd)
+
+    
+
+  }
+  save(Maxent_models, file = paste0("./analysis/data/derived_data/save/",era,"_",area,"_MaxEnt.RData"))
+  cli_progress_update()
+  }
+}
+cli_progress_done()
+```
+
+
+#### For Rhine Valley
+
+```
+MaxEnt "Rhine" for "BA" ■■■■■                                        12% [1/8] |  ETA:  1h - Time elapsed: 00:12:3.6
+```
+
+```{r model runs APM model Rhine BA hide, echo= FALSE, fig.cap=c("Block Rhine BA", "Folds Rhine BA PA1", "Folds Rhine BA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Rhine_BA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Rhine_BA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Rhine_BA_PA2.png")
+
+```
+
+```
+MaxEnt "Rhine" for "IA" ■■■■■■■■■                                    25% [2/8] |  ETA:  1h - Time elapsed: 00:19:40.7
+```
+
+```{r model runs APM model Rhine IA hide, echo= FALSE, fig.cap=c("Block Rhine IA", "Folds Rhine IA PA1", "Folds Rhine IA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Rhine_IA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Rhine_IA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Rhine_IA_PA2.png")
+
+```
+
+
+#### For Lazio area
+
+```
+MaxEnt "Lazio" for "BA" ■■■■■■■■■■■■                              38% [3/8] |  ETA:  1h - Time elapsed: 00:34:7.1
+```
+
+```{r model runs APM model Lazio BA hide, echo= FALSE, fig.cap=c("Block Lazio BA", "Folds Lazio BA PA1", "Folds Lazio BA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Lazio_BA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Lazio_BA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Lazio_BA_PA2.png")
+
+```
+
+```
+MaxEnt "Lazio" for "IA" ■■■■■■■■■■■■■■■■                        50% [4/8] |  ETA: 44m - Time elapsed: 00:44:11.6
+```
+
+```{r model runs APM model Lazio IA hide, echo= FALSE, fig.cap=c("Block Lazio IA", "Folds Lazio IA PA1", "Folds Lazio IA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Lazio_IA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Lazio_IA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Lazio_IA_PA2.png")
+
+```
+
+
+#### For Shephelah area
+
+```
+MaxEnt "Shephelah" for "BA" ■■■■■■■■■■■■■■■■■■■■                62% [5/8] |  ETA: 36m - Time elapsed: 00:59:28.4
+```
+
+```{r model runs APM model Shephelah BA hide, echo= FALSE, fig.cap=c("Block Shephelah BA", "Folds Shephelah BA PA1", "Folds Shephelah BA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Shephelah_BA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Shephelah_BA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Shephelah_BA_PA2.png")
+
+```
+
+```
+MaxEnt "Shephelah" for "IA" ■■■■■■■■■■■■■■■■■■■■■■■           75% [6/8] |  ETA: 24m - Time elapsed: 01:11:38.8
+```
+
+```{r model runs APM model Shephelah IA hide, echo= FALSE, fig.cap=c("Block Shephelah IA", "Folds Shephelah IA PA1", "Folds Shephelah IA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Shephelah_IA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Shephelah_IA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Shephelah_IA_PA2.png")
+
+```
+
+
+#### For Kurdistan area
+
+```
+MaxEnt "Kurdistan" for "BA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■       88% [7/8] |  ETA: 12m - Time elapsed: 01:22:32.9
+```
+
+```{r model runs APM model Kurdistan BA hide, echo= FALSE, fig.cap=c("Block Kurdistan BA", "Folds Kurdistan BA PA1", "Folds Kurdistan BA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Kurdistan_BA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Kurdistan_BA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Kurdistan_BA_PA2.png")
+
+```
+
+```
+MaxEnt "Kurdistan" for "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [8/8] |  ETA:  0s - Time elapsed: 01:48:17.5
+```
+
+```{r model runs APM model Kurdistan IA hide, echo= FALSE, fig.cap=c("Block Kurdistan IA", "Folds Kurdistan IA PA1", "Folds Kurdistan IA PA2")}
+
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Blocks_Kurdistan_IA.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Kurdistan_IA_PA1.png")
+knitr::include_graphics("../data/derived_data/pre_process/blocks/Folds_Kurdistan_IA_PA2.png")
+
+```
+
+### Models evaluation functions
+
+#### Adapted Kfold ROC function
+
+```{r ROC for kfold function APM model, eval= FALSE}
+
+plotROC_kfold <- function (model, test = NULL, show_folds = NULL) 
+{
+  if (!requireNamespace("plotROC", quietly = TRUE)) {
+    cli::cli_abort("Please install package {.pkg plotROC} to use this function", 
+                   call = NULL)
+  }
+  
+  if (!inherits(model, "SDMmodelCV")) {
+    cli::cli_abort("This function is designed for k-fold cross-validation models (SDMmodelCV objects)", 
+                   call = NULL)
+  }
+  
+  if (inherits(model@models[[1]]@model, "Maxent")) {
+    type <- "raw"
+  } 
+  else {
+    type <- "link"
+  }
+  
+  df_list <- list()
+  auc <- numeric()
+  all_points <- c()
+  all_preds <- c()
+  labels_cv <- c()
+  
+  for (i in seq_along(model@models)) {
+    fold_model <- model@models[[i]]
+    
+    df_list[[i]] <- data.frame(set = paste0("K",i), pa = fold_model@data@pa, pred = predict(fold_model, 
+                                                                                            data = fold_model@data, type = type), stringsAsFactors = FALSE)
+    
+    all_preds <- c(all_preds, df_list[[i]]$pred)
+    all_points <- c(all_points, df_list[[i]]$pa)
+    auc[[i]] <- auc(fold_model)
+    labels_cv[i] <- paste0("K-fold ", i, " ",  round(auc[[i]], 4))
+  }  
+  
+  df <- data.frame(
+    set = rep("Train mean", length(all_points)),
+    stringsAsFactors = FALSE
+  )
+  df <- as.data.frame(cbind(df, all_points, all_preds))
+  colnames(df) <- c("set", "pa", "pred") 
+  
+  labels <- paste0("Mean train ",round(SDMtune::auc(model),4)) 
+  
+  if (!is.null(test)) {
+    df_test <- data.frame(set = "Test", pa = test@pa, pred = predict(model, 
+                                                                     data = test, type = type), stringsAsFactors = FALSE)
+    df_test_list <- list()
+    auc_test_list <- numeric()
+    all_points_test <- c()
+    all_preds_test <- c()
+    labels_cv_test <- c()
+    
+    for (i in seq_along(model@models)) {
+      fold_model <- model@models[[i]]
+      df_test_list[[i]] <- data.frame(set = paste0("K",i, " test"), pa = test@pa, 
+                                      pred = predict(fold_model, data = test, type = type), 
+                                      stringsAsFactors = FALSE)
+      all_preds_test <- c(all_preds_test, df_test_list[[i]]$pred)
+      all_points_test <- c(all_points_test, df_test_list[[i]]$pa)
+      auc_test_list[[i]] <- auc(fold_model)
+    }
+    
+    df_test <- data.frame(
+      set = rep("Test mean", length(all_points_test)),
+      stringsAsFactors = FALSE
+    )
+    df_test <- as.data.frame(cbind(df_test, all_points_test, all_preds_test))
+    colnames(df_test) <- c("set", "pa", "pred") 
+    
+    df <- rbind(df, df_test) 
+    label_test <- paste0("Mean test ",round(SDMtune::auc(model, test = test),4))
+    labels <- c(label_test, labels)
+  }
+  
+  if (!is.null(show_folds)) {
+    df_folds <- do.call(rbind, df_list) 
+    df <- rbind(df, df_folds) 
+    labels <- c(labels_cv, labels)
+  }  
+  
+  my_plot <- ggplot(df, aes(m = .data$pred, d = .data$pa, group = .data$set)) + 
+    plotROC::geom_roc(n.cuts = 0, aes(color = .data$set), size = 0.5) + 
+    ggplot2::scale_color_discrete(name = "AUC",labels = labels) + 
+    ggplot2::geom_segment(aes(x = 0, y = 0, xend = 1, yend = 1), color = "grey", linetype = 2) + 
+    ggplot2::labs(x = "False Positive Rate", y = "True Positive Rate") + 
+    ggplot2::coord_fixed() + ggplot2::theme_minimal() + 
+    ggplot2::theme(text = ggplot2::element_text(colour = "#666666"))
+  if (!is.null(test)) {
+    my_plot <- my_plot + ggplot2::guides(colour = ggplot2::guide_legend(reverse = TRUE))
+  }
+#  plot(my_plot)
+  sd_auc <- sd(auc)
+  sd_auc_test <- sd(SDMtune::auc(model, test = test))
+  
+  
+  # Afficher les statistiques dans la console
+  cat("Cross-Validation ROC Statistics:\n")
+  cat("Mean AUC train:", round(SDMtune::auc(model),4), "\n")
+  cat("Standard deviation AUC train:", round(sd_auc, 4), "\n")
+  cat("Min AUC train:", round(min(auc), 4), "\n")
+  cat("Max AUC train:", round(max(auc), 4), "\n")
+  if (!is.null(test)) {
+    cat("Mean AUC test:", round(SDMtune::auc(model, test = test),4), "\n")
+    cat("Standard deviation AUC test:", round(sd_auc_test, 4), "\n")
+    cat("Min AUC test:", round(min(auc_test_list), 4), "\n")
+    cat("Max AUC test:", round(max(auc_test_list), 4), "\n")
+  }  
+  return(my_plot)
+  
+}
+
+```
+
+#### Adapted Kfold ROC function
+
+```{r modelReportCV function APM model, eval= FALSE}
+modelReportCV <- function (model, folder, test = NULL, type = NULL, response_curves = FALSE, 
+                           only_presence = FALSE, jk = FALSE, env = NULL, clamp = TRUE, 
+                           permut = 10, verbose = TRUE) 
+{
+  if (!requireNamespace("kableExtra", quietly = TRUE)) {
+    cli::cli_abort("Please install package {.pkg kableExtra} to use this function", 
+                   call = NULL)
+  }
+  if (!requireNamespace("htmltools", quietly = TRUE)) {
+    cli::cli_abort("Please install package {.pkg htmltools} to use this function", 
+                   call = NULL)
+  }
+  if (file.exists(file.path(getwd(), folder))) {
+    msg <- cli::cli_text(cli::col_red(cli::symbol$fancy_question_mark), 
+                         " The folder {.file {folder}} already exists,", 
+                         " do you want to overwrite it?")
+    continue <- utils::menu(choices = c("Yes", "No"), title = msg)
+  }
+  else {
+    continue <- 1
+  }
+  if (continue == 1) {
+    template <- file.path(getwd(), "./code/R/modelReportCV.Rmd")
+    folder <- file.path(getwd(), folder)
+    plot_folder <- file.path(folder, "plots")
+    dir.create(plot_folder, recursive = TRUE, showWarnings = FALSE)
+    species <- gsub(" ", "_", tolower(model@data@species))
+    output_file <- paste0(species, ".html")
+    if (verbose) 
+      cli::cli_text("\f", cli::rule(
+        left = paste("Model Report - class:", class(model)[1]),
+        right = cli::style_italic(model@data@species),
+        line_col = "#4bc0c0", col = "#f58410", width = 80))
+    rmarkdown::render(template, output_file = output_file, 
+                      output_dir = folder, params = list(model = model, 
+                                                         type = type, test = test, folder = folder, plot_folder = plot_folder, 
+                                                         env = env, jk = jk, response_curves = response_curves, 
+                                                         only_presence = only_presence, clamp = clamp, 
+                                                         permut = permut, verbose = verbose), quiet = TRUE)
+    utils::browseURL(file.path(folder, output_file))
+  }
+}
+```
+
+### Model reports
+
+We used the `modelReport` function which we adapted to fit MWD CV models 
+
+```{r model evaluation figures APM model, eval= FALSE}
+
+# 03.5 Create a merge report ===================================================
+
+# Load the functions
+source("./analysis/code/R/report_figures/plotROC_kfold.R")
+source("./analysis/code/R/report_figures/modelReportCV.R")
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+for (area in areas) {
+  for (era in eras) {
+    load(paste0("./analysis/data/derived_data/save/",era,"_",area,"_MaxEnt.RData"))
+  
+    if (!dir.exists(paste0("./analysis/data/derived_data/model/",area))) {
+      dir.create(paste0("./analysis/data/derived_data/model/",area))}
+  
+    for (i in 1:2) {
+      modelReportCV(model = Maxent_models[[i]]$final_model,
+                  folder = paste0("./analysis/data/derived_data/model/",area,"/",era,"_PA.",i),
+                  test = Maxent_models[[i]]$test_swd,
+                  type = "cloglog",
+                  response_curves = TRUE,
+                  only_presence = FALSE,
+                  jk = FALSE,
+                  clamp = TRUE,
+                  permut = 4,
+                  verbose = TRUE)
+      }
+  }
+} 
+
+stopCluster(cl)  
+
+rm(list=setdiff(ls(), c("eras", "areas", "projections")))
+```
+
+### Figures
+
+```{r model evaluation stat APM model, eval= FALSE}
+
+# 03.6 Check both models =======================================================
+source("./analysis/code/R/report_figures/plotROC_kfold.R")
+
+cli_progress_bar(
+  format = "MaxEnt figures {.val {area}} {.val {era}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+  total = length(eras), 
+  clear = FALSE
+)
+
+Figures <- list()
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+for (area in areas) {
+  for (era in eras) {
+    load(paste0("./analysis/data/derived_data/save/",era,"_",area,"_MaxEnt.RData"))
+    
+    cat("Training AUC 1: ",area, era, SDMtune::auc(Maxent_models[[1]]$final_model), "\n")
+    cat("Testing AUC 1: ",area, era, SDMtune::auc(Maxent_models[[1]]$final_model, test = Maxent_models[[1]]$test_swd), "\n")
+    plot(Maxent_models[[1]]$genetic, title = paste0("My experiment PA1 for ",era), interactive = TRUE)
+    
+    cat("Training AUC 2: ",area, era ,SDMtune::auc(Maxent_models[[2]]$final_model), "\n")
+    cat("Testing AUC 2: ",area, era, SDMtune::auc(Maxent_models[[2]]$final_model, test = Maxent_models[[2]]$test_swd), "\n")
+    plot(Maxent_models[[2]]$genetic, title = paste0("My experiment PA2",era), interactive = TRUE)
+    
+    # Select your model
+    ifelse(SDMtune::auc(Maxent_models[[1]]$final_model) > SDMtune::auc(Maxent_models[[2]]$final_model), x <- 1, x <- 2)
+    model <- Maxent_models[[x]]$final_model
+    test <- Maxent_models[[x]]$test
+    
+    # 03.7 Explore the results ===================================================
+    # Change variables names for plots
+    
+    replace_names <- function(original_names) {
+      
+      replacements <- list(
+        list(pattern = "River_cost_permanent", 
+             replacement = "River distance \ncost permanent"),
+        list(pattern = "River_cost_seasonal", 
+             replacement = "River distance \ncost seasonal"),
+        list(pattern = "River_cost", 
+             replacement = "River distance \ncost"),
+        list(pattern = "LSWI.1613", 
+             replacement = "LSWI 1613"),
+        list(pattern = "LSWI.2202", 
+             replacement = "LSWI 2202")
+      )
+      
+      new_names <- original_names
+      
+      for (rule in replacements) {
+        matches <- grep(rule$pattern, new_names, fixed = TRUE)
+        
+        if (length(matches) > 0) {
+          new_names[matches] <- rule$replacement
+        }
+      }
+      return(new_names)
+    }
+  
+    replacers <- replace_names(colnames(model@data@data))
+    
+    
+    # Jacknife with all variables
+    jK <- doJk(model,
+               metric = "auc",
+               with_only = TRUE,
+               test = test)
+    
+    jKtrain <- plotJk(jK, type = c("train"))
+    jKtrain$data$Variable <- as.factor(replacers)
+    
+    jKtest <- plotJk(jK, type = c("test"))
+    jKtest$data$Variable <- as.factor(replacers)
+    
+    combined_plot <- jKtrain + jKtest +
+      plot_layout(guides = "collect")
+    
+    combined_plot <- combined_plot +
+      plot_annotation(title = paste0(area, " Jackknife Plot - AUC for ",era, " (Train vs Test)"),
+                      theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold")))
+    
+    print(combined_plot)
+    
+    ggsave(paste0("./analysis/data/derived_data/model/",area,"/Jacknife",area, "_", era,".png"), combined_plot, width = 12, height = 5)
+    ggsave(paste0("./analysis/data/derived_data/model/",area,"/Jacknife",area, "_", era,".pdf"), combined_plot, width = 12, height = 5)
+    
+    # AUC for export
+    ROC <- plotROC_kfold(model, test = test)
+    ggsave(paste0("./analysis/data/derived_data/model/",area,"/AUC_",area, "_", era,".png"), ROC , width = 6, height = 6)
+    ggsave(paste0("./analysis/data/derived_data/model/",area,"/AUC_",area, "_", era,".pdf"), ROC , width = 6, height = 6)
+    
+    # Var importance
+    var <- varImp(model, permut = 10)
+    
+    for (i in seq_along(replacers)) {
+      var[,1] <- gsub(colnames(model@data@data)[i], replacers[i], var[,1])
+    }
+    
+    write.table(var, paste0("./analysis/data/derived_data/model/",area,"/Variables_importance_",area, "_", era,".txt"))
+    
+    var_plot <- plotVarImp(var, color = "#abd9e9")
+    var_plot
+    ggsave(paste0("./analysis/data/derived_data/model/",area,"/Variables_importance_",area, "_", era,".png"), var_plot , width = 6, height = 6)
+    ggsave(paste0("./analysis/data/derived_data/model/",area,"/Variables_importance_",area, "_", era,".pdf"), var_plot , width = 6, height = 6)
+    
+    Figures[[area]][[era]] <- list(jk = jK,
+                                  roc = ROC,
+                                  var_imp = var) 
+
+  
+  }
+  cli_progress_update()
+}
+cli_progress_done()
+stopCluster(cl)  
+
+PA_selection <- data.frame(BA = c(1, 2, 2, 1), IA = c(2, 2, 1, 1), row.names = c("Rhine", "Lazio", "Shephelah", "Kurdistan"))
+write.table(PA_selection,"./analysis/data/derived_data/model/PA_selection.txt")
+
+save(Figures, file = "./analysis/data/derived_data/save/Figures_APM.RData")
+rm(list=setdiff(ls(), c("areas", "eras", "projections", "PA_selection")))
+```
+
+#### Rhine Valley
+
+```{r model evaluation stat APM Rhine hide, echo= FALSE}
+library(SDMtune)
+library(patchwork)
+library(ggplot2)
+library(plotROC)
+load("../data/derived_data/save/Figures_APM.RData")
+source("../code/R/report_figures/plotROC_kfold_script.R")
+
+
+for (era in eras) {
+  load(paste0("../data/derived_data/save/",era,"_Rhine_MaxEnt.RData"))
+  cat("Training AUC 1: Rhine", era, SDMtune::auc(Maxent_models[[1]]$final_model), "\n")
+  cat("Testing AUC 1: Rhine", era, SDMtune::auc(Maxent_models[[1]]$final_model, test = Maxent_models[[1]]$test_swd), "\n")
+    
+  cat("Training AUC 2:Rhine", era ,SDMtune::auc(Maxent_models[[2]]$final_model), "\n")
+  cat("Testing AUC 2: Rhine", era, SDMtune::auc(Maxent_models[[2]]$final_model, test = Maxent_models[[2]]$test_swd), "\n")
+  
+  ifelse(SDMtune::auc(Maxent_models[[1]]$final_model) > SDMtune::auc(Maxent_models[[2]]$final_model), x <- 1, x <- 2)
+  model <- Maxent_models[[x]]$final_model
+  test <- Maxent_models[[x]]$test
+  
+  jK <- Figures$Rhine[[era]]$jk
+
+  jKtrain <- plotJk(jK, type = c("train"))
+  jKtest <- plotJk(jK, type = c("test"))
+    
+  combined_plot <- jKtrain + jKtest +
+  plot_layout(guides = "collect")
+    
+  combined_plot <- combined_plot +
+  plot_annotation(title = paste0("Rhine Jackknife Plot - AUC for ",era, " (Train vs Test)"),
+                    theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold")))
+    
+  print(combined_plot)
+  ROC <- plotROC_kfold(model, test = test)
+  plot(ROC)
+  
+  var <- Figures$Rhine[[era]]$var_imp
+  plot(var_plot <- plotVarImp(var, color = "#abd9e9"))
+}
+
+
+```
+
+```
+MaxEnt figures "Rhine" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:52:44
+```
+
+#### Lazio
+
+```{r model evaluation stat APM Lazio hide, echo= FALSE}
+
+for (era in eras) {
+  load(paste0("../data/derived_data/save/",era,"_Lazio_MaxEnt.RData"))
+  cat("Training AUC 1: Lazio", era, SDMtune::auc(Maxent_models[[1]]$final_model), "\n")
+  cat("Testing AUC 1: Lazio", era, SDMtune::auc(Maxent_models[[1]]$final_model, test = Maxent_models[[1]]$test_swd), "\n")
+    
+  cat("Training AUC 2:Lazio", era ,SDMtune::auc(Maxent_models[[2]]$final_model), "\n")
+  cat("Testing AUC 2: Lazio", era, SDMtune::auc(Maxent_models[[2]]$final_model, test = Maxent_models[[2]]$test_swd), "\n")
+  
+  jK <- Figures$Lazio[[era]]$jk
+
+  jKtrain <- plotJk(jK, type = c("train"))
+  jKtest <- plotJk(jK, type = c("test"))
+    
+  combined_plot <- jKtrain + jKtest +
+  plot_layout(guides = "collect")
+    
+  combined_plot <- combined_plot +
+  plot_annotation(title = paste0("Lazio Jackknife Plot - AUC for ",era, " (Train vs Test)"),
+                    theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold")))
+    
+  print(combined_plot)
+  ROC <- plotROC_kfold(model, test = test)
+  plot(ROC)
+  
+  var <- Figures$Lazio[[era]]$var_imp
+  plot(var_plot <- plotVarImp(var, color = "#abd9e9"))
+}
+
+
+```
+
+```
+MaxEnt figures "Lazio" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 01:35:31.9
+```
+
+#### Shephelah
+
+```{r model evaluation stat APM Shephelah hide, echo= FALSE}
+
+for (era in eras) {
+  load(paste0("../data/derived_data/save/",era,"_Shephelah_MaxEnt.RData"))
+  cat("Training AUC 1: Shephelah", era, SDMtune::auc(Maxent_models[[1]]$final_model), "\n")
+  cat("Testing AUC 1: Shephelah", era, SDMtune::auc(Maxent_models[[1]]$final_model, test = Maxent_models[[1]]$test_swd), "\n")
+    
+  cat("Training AUC 2:Shephelah", era ,SDMtune::auc(Maxent_models[[2]]$final_model), "\n")
+  cat("Testing AUC 2: Shephelah", era, SDMtune::auc(Maxent_models[[2]]$final_model, test = Maxent_models[[2]]$test_swd), "\n")
+  
+  jK <- Figures$Shephelah[[era]]$jk
+
+  jKtrain <- plotJk(jK, type = c("train"))
+  jKtest <- plotJk(jK, type = c("test"))
+    
+  combined_plot <- jKtrain + jKtest +
+  plot_layout(guides = "collect")
+    
+  combined_plot <- combined_plot +
+  plot_annotation(title = paste0("Shephelah Jackknife Plot - AUC for ",era, " (Train vs Test)"),
+                    theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold")))
+    
+  print(combined_plot)
+  ROC <- plotROC_kfold(model, test = test)
+  plot(ROC)
+  
+  var <- Figures$Shephelah[[era]]$var_imp
+  plot(var_plot <- plotVarImp(var, color = "#abd9e9"))
+}
+```
+
+```
+MaxEnt figures "Shephelah" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 01:12:45.1
+```
+
+#### Kurdistan
+
+```{r model evaluation stat APM Kurdistan hide, echo= FALSE}
+
+for (era in eras) {
+  load(paste0("../data/derived_data/save/",era,"_Kurdistan_MaxEnt.RData"))
+  cat("Training AUC 1: Kurdistan", era, SDMtune::auc(Maxent_models[[1]]$final_model), "\n")
+  cat("Testing AUC 1: Kurdistan", era, SDMtune::auc(Maxent_models[[1]]$final_model, test = Maxent_models[[1]]$test_swd), "\n")
+    
+  cat("Training AUC 2:Kurdistan", era ,SDMtune::auc(Maxent_models[[2]]$final_model), "\n")
+  cat("Testing AUC 2: Kurdistan", era, SDMtune::auc(Maxent_models[[2]]$final_model, test = Maxent_models[[2]]$test_swd), "\n")
+  
+  jK <- Figures$Kurdistan[[era]]$jk
+
+  jKtrain <- plotJk(jK, type = c("train"))
+  jKtest <- plotJk(jK, type = c("test"))
+    
+  combined_plot <- jKtrain + jKtest +
+  plot_layout(guides = "collect")
+    
+  combined_plot <- combined_plot +
+  plot_annotation(title = paste0("Kurdistan Jackknife Plot - AUC for ",era, " (Train vs Test)"),
+                    theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold")))
+    
+  print(combined_plot)
+  ROC <- plotROC_kfold(model, test = test)
+  plot(ROC)
+  
+  var <- Figures$Kurdistan[[era]]$var_imp
+  plot(var_plot <- plotVarImp(var, color = "#abd9e9"))
+}
+
+```
+
+```
+MaxEnt figures "Kurdistan" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 01:40:15.4
+```
+
+Here is a table of the selected PA seed for each iterations
+
+```{r model PA selection APM model, echo= FALSE}
+
+table <- read.table("../data/derived_data/model/PA_selection.txt")
+table
+```
+
+### Prediction of the study area
+
+We have predicted several values: the mean, median, minimum, maximum, and standard deviation for the **4** cross-fold models. For the binary map, we selected the threshold that maximised sensitivity (TPR) and specificity (TNR). This threshold is efficient for SDMs [@fielding_review_1997] and APMs [@yaworsky_neanderthal_2024]. We used the `thresholds` function from *SDMtune* with a "cloglog" method and then merged the results of the **4** folds by the mean of the results.
+
+```{r model prediction maps APM model, eval= FALSE}
+# 04 Prediction model ##########################################################
+# 04.1 Prepare the data ========================================================
+
+pred <- list()
+sf <- list()
+for (area in areas) {
+  sf[[area]] <- st_read("./analysis/data/raw_data/covariates/Hex_grid.gpkg", layer = paste0(area, "_covariates"))
+  df <- st_drop_geometry(sf[[area]])
+  row.names(df) <- df[,1]
+  pred[[area]] <- df[,-1]
+}
+
+
+cli_progress_bar(
+  format = "Predictions {.val {area}} {.val {era}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+  total = length(eras), 
+  clear = FALSE
+)
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+# 04.2 Run the predictions =====================================================
+
+ths_PA <- data.frame(NULL)
+
+for (area in areas) {
+  for (era in eras) {
+    
+    cov_name <- c(paste0(era,"_bio03"), paste0(era,"_bio12"), paste0(era,"_bio15"), paste0(era,"_bio16"))
+    cov_pred <- pred[[area]][,c(9:length(pred[[area]]))]
+    cov_era <-  pred[[area]][cov_name]
+    colnames(cov_era) <- c("Bio03", "Bio12", "Bio15", "Bio16")
+    cov_pred <- cbind(cov_pred, cov_era)
+    cov_pred <- na.omit(cov_pred)
+    
+    load(paste0("./analysis/data/derived_data/save/",era,"_",area,"_MaxEnt.RData"))
+    nb <- PA_selection[area,era]
+    model <- Maxent_models[[nb]]$final_model 
+    cov_pred <- cov_pred[names(model@data@data)]
+    
+    maps <- predict(model,
+                    data = cov_pred,
+                    fun = c("mean", "sd", "min", "max", "median"),
+                    type = "cloglog")
+    
+    maps_df <- as.data.frame(maps)
+
+    ths <- list()
+    for (i in 1:4) {
+      ths[[i]] <- SDMtune::thresholds(model@models[[i]], 
+                                      type = "cloglog")
+    }
+    
+    id_col <- ths[[1]][, 1, drop = FALSE]
+    
+    numeric_matrices <- lapply(ths, function(df) {
+      as.matrix(df[, -1]) |> apply(2, as.numeric)
+    })
+    
+    numeric_mean <- Reduce("+", numeric_matrices) / length(numeric_matrices)
+    ths_mean <- data.frame(id_col, numeric_mean, check.names = FALSE)
+    ths_PA[area,era] <- ths_mean[3, 2]
+    maps_df$ths <- maps_df$mean
+    maps_df$ths <- ifelse(maps_df$ths> ths_PA[1,era], 1, 0)
+    
+    maps_df$id <- row.names(cov_pred)
+    pred_era <- merge(sf[[area]], maps_df, by.x = 0, by.y ="id", all = TRUE)
+    pred_era <- na.omit(pred_era)
+    pred_era <- pred_era[,(ncol(pred_era)-6):ncol(pred_era)]
+    
+    st_write(pred_era, paste0("./analysis/data/derived_data/maps/",area,"_predictions_maps.gpkg"), layer = paste0("Prediction_",era),  append = FALSE)
+  }
+  cli_progress_update()
+}
+cli_progress_done()
+
+stopCluster(cl)
+
+write.table(ths_PA,  "./analysis/data/derived_data/model/Thresholds.txt")
+
+rm(list=setdiff(ls(), c("areas", "eras", "projections", "PA_selection", "ths_PA")))
+# 04.3 Create raster maps ======================================================
+
+
+for (area in areas) {
+  for (era in eras) {
+    raster <- rast(paste0("./analysis/data/raw_data/covariates/",area,"_covariates.tif"))
+    dem <- raster$DEM
+    
+    sf <- st_read(paste0("./analysis/data/derived_data/maps/",area,"_predictions_maps.gpkg"), layer = paste0("Prediction_",era))
+    raster_mean  <- rasterize(vect(sf), dem, field = "mean", background=NA)
+    raster_sd  <- rasterize(vect(sf), dem, field = "sd", background=NA)
+    raster_binary  <- rasterize(vect(sf), dem, field = "ths", background=NA)
+    
+    # Plot mean map
+    plotPred(raster_mean,
+             lt = paste0("Site probality mean\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c"))
+    
+    # Plot SD map
+    plotPred(raster_sd,
+             lt = paste0("Site probality sd\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c"))
+    
+    plotPred(raster_binary,
+             lt = paste0("Site binary values\nfor ", era, " period"),
+             colorramp = c("#ffffbf", "darkgreen"))
+    
+    writeRaster(raster_mean, paste0("./analysis/data/derived_data/maps/",area,"_prediction_maps_",era,".tif"), overwrite=TRUE)
+    writeRaster(raster_sd, paste0("./analysis/data/derived_data/maps/",area,"_prediction_maps_sd_",era,".tif"), overwrite=TRUE)
+    writeRaster(raster_binary, paste0("./analysis/data/derived_data/maps/",area,"_prediction_maps_binary_",era,".tif"), overwrite=TRUE)
+  }  
+}
+rm(list=setdiff(ls(), c("areas", "eras", "projections", "PA_selection", "ths_PA")))
+```
+#### Rhine Valley
+
+```{r model prediction maps Rhine hide, echo= FALSE}
+library(terra)
+library(rasterVis)
+
+for (era in eras) {
+  
+    raster_mean <- rast(paste0("../data/derived_data/maps/Rhine_prediction_maps_",era,".tif"))
+    raster_sd <- rast(paste0("../data/derived_data/maps/Rhine_prediction_maps_sd_",era,".tif"))
+    raster_binary  <- rast(paste0("../data/derived_data/maps/Rhine_prediction_maps_binary_",era,".tif"))
+  
+     plot(plotPred(raster_mean,
+             lt = paste0("Rhine site probality mean\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    # Plot SD map
+    plot(plotPred(raster_sd,
+             lt = paste0("Rhine site probality sd\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    plot(plotPred(raster_binary,
+             lt = paste0("Rhine site binary values\nfor ", era, " period"),
+             colorramp = c("#ffffbf", "darkgreen")))
+}
+
+
+```
+
+```
+Predictions "Rhine" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:02:52 
+```
+#### Lazio
+
+```{r model prediction maps Lazio hide, echo= FALSE}
+for (era in eras) {
+  
+    raster_mean <- rast(paste0("../data/derived_data/maps/Lazio_prediction_maps_",era,".tif"))
+    raster_sd <- rast(paste0("../data/derived_data/maps/Lazio_prediction_maps_sd_",era,".tif"))
+    raster_binary <- rast(paste0("../data/derived_data/maps/Lazio_prediction_maps_binary_",era,".tif"))
+  
+     plot(plotPred(raster_mean,
+             lt = paste0("Lazio site probality mean\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    # Plot SD map
+    plot(plotPred(raster_sd,
+             lt = paste0("Lazio site probality sd\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    plot(plotPred(raster_binary,
+             lt = paste0("Lazio site binary values\nfor ", era, " period"),
+             colorramp = c("#ffffbf", "darkgreen")))
+}
+
+```
+
+
+```
+Predictions "Lazio" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:03:02 
+```
+
+#### Shephelah
+
+```{r model prediction maps Shephelah hide, echo= FALSE}
+for (era in eras) {
+  
+    raster_mean <- rast(paste0("../data/derived_data/maps/Shephelah_prediction_maps_",era,".tif"))
+    raster_sd <- rast(paste0("../data/derived_data/maps/Shephelah_prediction_maps_sd_",era,".tif"))
+    raster_binary <- rast(paste0("../data/derived_data/maps/Shephelah_prediction_maps_binary_",era,".tif"))
+  
+     plot(plotPred(raster_mean,
+             lt = paste0("Shephelah site probality mean\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    # Plot SD map
+    plot(plotPred(raster_sd,
+             lt = paste0("Shephelah site probality sd\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    plot(plotPred(raster_binary,
+             lt = paste0("Shephelah site binary values\nfor ", era, " period"),
+             colorramp = c("#ffffbf", "darkgreen")))
+}
+
+```
+
+
+```
+Predictions "Shephelah" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:02:15 
+```
+
+#### Kurdistan
+
+```{r model prediction maps Kurdistan hide, echo= FALSE}
+for (era in eras) {
+  
+    raster_mean <- rast(paste0("../data/derived_data/maps/Kurdistan_prediction_maps_",era,".tif"))
+    raster_sd <- rast(paste0("../data/derived_data/maps/Kurdistan_prediction_maps_sd_",era,".tif"))
+    raster_binary <- rast(paste0("../data/derived_data/maps/Kurdistan_prediction_maps_binary_",era,".tif"))
+  
+     plot(plotPred(raster_mean,
+             lt = paste0("Kurdistan site probality mean\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    # Plot SD map
+    plot(plotPred(raster_sd,
+             lt = paste0("Kurdistan site probality sd\nfor ", era, " period"),
+             colorramp = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c")))
+    
+    plot(plotPred(raster_binary,
+             lt = paste0("Kurdistan site binary values\nfor ", era, " period"),
+             colorramp = c("#ffffbf", "darkgreen")))
+}
+
+```
+
+```
+Predictions "Kurdistan" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:04:07 
+```
+
+### APMs metrics
+
+We computed a confusion matrix to assess sensitivity (TPR), specificity (TNR), accuracy and the kappa index. Furthermore, we computed the true skill statistic (TSS) with the `tss` function and the area under the curve (AUC) with the `auc` function, both from the *SDMtune* package. Finally, we computed the Kvamme Gain [@kvamme_developement_1988, p. 329], particularly efficient for evaluating the validity of an archaeological model regarding the archaeological potential area.
+
+-   Sensitivity $TPR = \frac{TP}{TP + FN}$
+
+\vspace{0.5cm}
+
+-   Specificity $TNR = \frac{TN}{TN + FP}$
+
+\vspace{0.5cm}
+
+-   Accuracy $Accuracy = \frac{TN + TP}{TN + FP + TP + FN}$
+
+\vspace{0.5cm}
+
+-   Cohen/Kappa index $k = \frac{Pr(a)-PR(e)}{1 - PR(e)}$
+
+\vspace{0.5cm}
+
+-   True Skill Statistic $TSS = TPR + TNR − 1$
+
+\vspace{0.5cm}
+
+-   Kvamme Gain $KG = 1 - \frac{p_m}{p_s}$. With $p_m$ the ratio of the probability area from the model to the total study area, and $p_s$ the percentage of sites predicted within the probability area.
+
+
+```{r metrics computation APM model, eval= FALSE}
+# 04.4 Check model statistics ==================================================
+
+# Function to evaluate metrics
+
+eval_metrics <- function(values, map, model, test = NULL) {
+  conf <- table(factor(values[["pred"]], levels = c(0, 1)), factor(values[["obs"]], levels = c(0, 1)))
+  
+  TP <- conf["1", "1"]
+  TN <- conf["0", "0"]
+  FP <- conf["1", "0"]
+  FN <- conf["0", "1"]
+  
+  sensitivity <- ifelse((TP + FN) > 0, TP / (TP + FN), NA)
+  specificity <- ifelse((TN + FP) > 0, TN / (TN + FP), NA)
+  accuracy    <- (TP + TN) / sum(conf)
+  
+  expected_acc <- (((TP + FP) * (TP + FN) + (FN + TN) * (FP + TN)) / sum(conf)^2)
+  kappa <- (accuracy - expected_acc) / (1 - expected_acc)
+  
+  tss <- SDMtune::tss(model, test =  test)
+  auc <- SDMtune::auc(model, test = test)
+  
+  
+  # Kvame gain as: gain = 1 - (pm / ps)
+  pm <- as.numeric(global(map, fun = function(x) sum(x == 1, na.rm = TRUE) / sum(!is.na(x))))
+  ps <- sum(values$obs == 1 & values$pred == 1)/sum(values$obs == 1)
+  
+  KG = 1 - (pm/ps)
+  
+  results <- data.frame(
+    Metric      = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "TSS", "AUC", "KG"),
+    Value       = c(accuracy, kappa, sensitivity, specificity, tss, auc, KG)
+  )
+  if (!is.null(test)){
+    test <- "test"
+  }
+  
+  if (is.null(test)){
+    test <- "train"
+  }
+  write.table(results,  paste0("./analysis/data/derived_data/model/",area,"/",area,"_metrics_",test, "_" ,era,".txt"))
+  
+  return(results)
+}
+
+metrics <- list()
+
+cli_progress_bar(
+  format = "Metrics {.val {area}} {cli::pb_bar} {cli::pb_percent} [{cli::pb_current}/{cli::pb_total}] | \ ETA: {cli::pb_eta} - Time elapsed: {cli::pb_elapsed_clock}",
+  total = length(eras), 
+  clear = FALSE
+)
+
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+for (area in areas) {
+  for (era in eras) {
+    load(paste0("./analysis/data/derived_data/save/",era,"_",area,"_MaxEnt.RData"))
+    sf <- st_read(paste0("./analysis/data/derived_data/maps/",area,"_predictions_maps.gpkg"), layer = paste0("Prediction_",era))
+    
+    nb <- PA_selection[area,era]
+    model <- Maxent_models[[nb]]$final_model
+    test <- Maxent_models[[nb]]$test
+    
+    # For training
+    train_df <- cbind(model@data@coords, model@data@pa)
+    train_df$id <- as.numeric(row.names(train_df))
+    
+    train_sf <- st_as_sf(train_df, coords = c("X", "Y"), crs = projections[[area]]) 
+    train_sf <- st_intersection(train_sf, sf["ths"])
+    train_sf <- train_sf[,-2]
+    train_df <- st_drop_geometry(train_sf)
+    colnames(train_df) <- c("obs", "pred")
+    
+    # For test
+    test_df <- cbind(test@coords, test@pa)
+    test_df$id <- as.numeric(row.names(test_df))
+    
+    test_sf <- st_as_sf(test_df, coords = c("X", "Y"), crs = projections[[area]]) 
+    test_sf <- st_intersection(test_sf, sf["ths"])
+    test_sf <- test_sf[,-2]
+    test_df <- st_drop_geometry(test_sf)
+    colnames(test_df) <- c("obs", "pred")
+    
+    map <- rast(paste0("./analysis/data/derived_data/maps/",area,"_prediction_maps_binary_",era,".tif"))
+    
+    train_metrics <- eval_metrics(train_df, map, model)
+    train_metrics
+    metrics[[area]][[era]]["Train"] <- train_metrics
+    
+    test_metrics <- eval_metrics(test_df, map, model, test)
+    test_metrics
+    metrics[[area]][[era]]["Test"] <- test_metrics
+    
+    
+  }
+  cli_progress_update()
+}
+cli_progress_done()
+stopCluster(cl)
+
+save(metrics, ths_PA, file = ("./analysis/data/derived_data/save/Models_results.RData"))
+rm(list=setdiff(ls(), c("areas", "eras", "projections", "PA_selection", "ths_PA")))
+```
+
+
+```{r metrics computation APM model hide, echo= FALSE}
+library(DT)
+library(dplyr)
+library(kableExtra)
+metrics_table <- data.frame(Metric = NULL, Value = NULL, Area = NULL, Era = NULL, TYpe = NULL)
+
+types <- c("train", "test")
+
+for (area in areas) {
+  
+  for (era in eras) {
+    
+    for (type in types) {
+      metrics_origin <- read.table(paste0("../data/derived_data/model/",area, "/",area, "_metrics_",type, "_",era, ".txt"))
+      metrics_origin$Area <- area
+      metrics_origin$Era <- era
+      metrics_origin$Type <- type
+
+      metrics_table <- rbind(metrics_table, metrics_origin)
+    }
+  }
+}
+
+metrics_table$Value <- round(metrics_table$Value, digits = 3)
+
+datatable(metrics_table, options = list(scrollX = TRUE, autoWidth = TRUE, pageLength = 20), class = 'compact')
+
+```
+
+```
+Metrics "Rhine" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:06:33
+
+Metrics "Lazio" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:00:45.6
+
+Metrics "Shephelah" "IA" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:07:01
+
+Metrics "Kurdistan" ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  100% [2/2] |  ETA:  0s - Time elapsed: 00:07:15.1
+```
+
+### Final publication maps
+
+#### Prediction maps
+
+You have to adapted manualy the *.tiff* or *.png* format.
+
+```{r final prediction maps APM model, eval= FALSE}
+
+# 05 Final figures for publication #############################################
+
+# 05.1 Import the layers for prediction ========================================
+
+APM_list <- NULL
+
+for (area in areas) {
+  for (era in eras) {
+    file <- list.files("./analysis/data/derived_data/maps/", 
+                       pattern = paste0(area,"_prediction_maps_",era,".tif"), 
+                       full.names = TRUE, 
+                       ignore.case = TRUE)
+    
+    APM_list <- c(APM_list, file) 
+  }
+}
+
+APM_maps <- lapply(APM_list, rast)
+
+
+# 05.2 Run for the predictive values ===========================================
+
+rasters <- list(Rhine = c(APM_maps[[1]],APM_maps[[2]]), Lazio = c(APM_maps[[3]],APM_maps[[4]]),
+                Shephelah = c(APM_maps[[5]],APM_maps[[6]]), Kurdistan = c(APM_maps[[7]],APM_maps[[8]]))
+
+# Map function
+plots <- list()
+
+for (area in areas) {
+  
+  for (i in 1:2) {
+    
+    era <- ifelse(i == 1, "BA", "IA")
+    n <- ifelse(area == "Shephelah" | area == "Kurdistan", 0.15, 0.3)
+    df_study <- as.data.frame(rasters[[area]][[i]], xy = TRUE)
+    names(df_study)[3] <- "value"
+    legend <- paste(area, era)
+    
+    x_range <- range(df_study$x, na.rm = TRUE)
+    y_range <- range(df_study$y, na.rm = TRUE)
+    
+    plot <- ggplot() +
+      geom_raster(data = df_study, aes(x = x, y = y, fill = value)) +
+      scale_fill_viridis_c(name = NULL) + 
+      coord_equal() +
+      annotate("label",  
+               x = x_range[1] + diff(x_range) * 0.05,  
+               y = y_range[2] - diff(y_range) * 0.05,
+               label = legend,
+                 hjust = n, 
+                 vjust = 0.5,
+                 size = 1.5,
+                 color = "black",
+                 fontface = "bold",
+                 fill = "grey80",        
+                 alpha = 0.6,           
+                 label.size = 0.1,       
+                 label.padding = unit(0.3, "lines")) +  
+      theme_void() +
+      theme(legend.position = "none",
+            plot.margin = margin(0, 0, 0, 0)
+      )
+    plots[[area]][[era]] <- plot
+  }
+}
+
+# Add the legend
+p1_legend <- ggplot(df_study, aes(x = x, y = y, fill = value)) +
+  geom_raster() +
+  scale_fill_viridis_c(name = "Probability\nof sites") +
+  coord_equal() +
+  theme_void() +
+  theme(legend.position = "right",
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 4)
+  )
+
+g_full <- ggplotGrob(p1_legend)
+legend_grob <- g_full$grobs[[which(sapply(g_full$grobs, function(x) x$name) == "guide-box")]]
+
+# Create a grid 
+for (area in areas) {
+  grid <- arrangeGrob(plots[[area]][[1]], plots[[area]][[2]],
+                      ncol = 2,
+                      widths = unit(rep(1, 2), "null"),
+                      padding = unit(0, "pt"))
+  
+  n <- ifelse(area == "Shephelah" | area == "Kurdistan", 400, 500)
+  tiff(paste0("./analysis/data/derived_data/figures/",area,"_predictive_plot.tiff"), width = 1400, height = n, res = 300, bg = "transparent")
+  #png(paste0("./analysis/data/derived_data/figures/",area,"_predictive_plot.png"), width = 1400, height = n, res = 300, bg = "transparent")
+  
+  grid.newpage()
+  grid.draw(arrangeGrob(
+    grid,
+    legend_grob,
+    ncol = 2,
+    widths = unit.c(unit(10, "cm"), unit(1.75, "cm"))
+  ))
+  dev.off() 
+}
+```
+
+
+```{r final prediction maps APM model hide, echo=FALSE, out.width="100%", fig.align="center", warning=FALSE, message=FALSE}
+
+knitr::include_graphics("../data/derived_data/figures/Rhine_predictive_plot.png")
+knitr::include_graphics("../data/derived_data/figures/Lazio_predictive_plot.png")
+knitr::include_graphics("../data/derived_data/figures/Shephelah_predictive_plot.png")
+knitr::include_graphics("../data/derived_data/figures/Kurdistan_predictive_plot.png")
+
+```
+
+#### Binary maps
+
+You have to adapted manually the *.tiff* or *.png* format.
+
+```{r final prediction maps binary APM model, eval = FALSE}
+
+# 05.3 Import the layers for binary ============================================
+
+APM_list <- NULL
+
+for (area in areas) {
+  for (era in eras) {
+    file <- list.files("./analysis/data/derived_data/maps/", 
+                       pattern = paste0(area,"_prediction_maps_binary_",era,".tif"), 
+                       full.names = TRUE, 
+                       ignore.case = TRUE)
+    
+    APM_list <- c(APM_list, file) 
+  }
+}
+
+APM_maps <- lapply(APM_list, rast)
+
+# 05.4 Run for the binary values ===============================================
+
+rasters <- list(Rhine = c(APM_maps[[1]],APM_maps[[2]]), Lazio = c(APM_maps[[3]],APM_maps[[4]]),
+                Shephelah = c(APM_maps[[5]],APM_maps[[6]]), Kurdistan = c(APM_maps[[7]],APM_maps[[8]]))
+
+
+# Map function
+plots <- list()
+plots_legend <- list()
+
+# Map function
+for (area in areas) {
+  for (i in 1:2) {
+    
+    era <- ifelse(i == 1, "BA", "IA")
+    n <- ifelse(area == "Shephelah" | area == "Kurdistan", 0.15, 0.3)
+    df_study <- as.data.frame(rasters[[area]][[i]], xy = TRUE)
+    names(df_study)[3] <- "value"
+    legend <- paste(area, era)
+    
+    x_range <- range(df_study$x, na.rm = TRUE)
+    y_range <- range(df_study$y, na.rm = TRUE)
+    
+    plot <- ggplot() +
+      geom_raster(data = df_study, aes(x = x, y = y, fill = factor(value))) +
+      scale_fill_manual(
+        values = c("0" = "grey", "1" = "green4"),
+        name = "Classe",
+        labels = c("0" = "Absence", "1" = "Presence")
+      ) +
+      coord_equal() +
+      annotate("label",  
+               x = x_range[1] + diff(x_range) * 0.05,  
+               y = y_range[2] - diff(y_range) * 0.05,
+               label = legend,
+               hjust = n, 
+               vjust = 0.5,
+               size = 1.5,
+               color = "black",
+               fontface = "bold",
+               fill = "grey80",        
+               alpha = 0.6,           
+               label.size = 0.1,       
+               label.padding = unit(0.3, "lines")) +  
+      theme_void() +
+      theme(legend.position = "none",
+            plot.margin = margin(0, 0, 0, 0))
+    
+    
+
+    plots[[area]][[era]] <- plot
+    
+  }
+  # Add the legend
+  p1_legend <- ggplot(df_study, aes(x = x, y = y, fill = factor(value))) +
+    geom_raster() +
+    scale_fill_manual(
+      values = c("0" = "grey", "1" = "green4"),
+      name = "Site presence\nbased on threshold",
+      labels = c("0" = "Absence", "1" = paste0("Presence \n threholds: \n",
+                                               "EB = ", round(ths_PA[area,1], digit = 3), "\n", 
+                                               "IA = ", round(ths_PA[area,2], digit = 3))))  +
+    coord_equal() +
+    theme_void() +
+    theme(
+      legend.position = "right",
+      legend.title = element_text(size = 6),
+      legend.text = element_text(size = 4)
+    )
+  
+  g_full <- ggplotGrob(p1_legend)
+  legend_grob <- g_full$grobs[[which(sapply(g_full$grobs, function(x) x$name) == "guide-box")]]
+  plots_legend[[area]] <- legend_grob
+  
+}
+
+
+# Create a grid 
+for (area in areas) {
+  grid <- arrangeGrob(plots[[area]][[1]], plots[[area]][[2]],
+    ncol = 2,
+    widths = unit(rep(1, 2), "null"),
+    padding = unit(0, "pt")
+  )
+  
+  n <- ifelse(area == "Shephelah" | area == "Kurdistan", 400, 500)
+  #tiff(paste0("./analysis/data/derived_data/figures/",area,"_binary_plot.tiff"), width = 1400, height = n, res = 300, bg = "transparent")
+  png(paste0("./analysis/data/derived_data/figures/",area,"_binary_plot.png"), width = 1400, height = n, res = 300, bg = "transparent")
+  
+  grid.newpage()
+  grid.draw(arrangeGrob(
+    grid,
+    plots_legend[[area]],
+    ncol = 2,
+    widths = unit.c(unit(10, "cm"), unit(1.75, "cm"))
+  ))
+  dev.off() 
+}
+```
+
+
+```{r final prediction maps binary APM model hide, echo=FALSE, out.width="100%", fig.align="center", warning=FALSE, message=FALSE}
+
+knitr::include_graphics("../data/derived_data/figures/Rhine_binary_plot.png")
+knitr::include_graphics("../data/derived_data/figures/Lazio_binary_plot.png")
+knitr::include_graphics("../data/derived_data/figures/Shephelah_binary_plot.png")
+knitr::include_graphics("../data/derived_data/figures/Kurdistan_binary_plot.png")
+
+```
+
+
+#### Aridity maps
+
+This map is produced in the paper 
+
+```{r aridity maps, eval= FALSE}
+# 06 de Martone index map ######################################################
+
+predictors <- list()
+
+for (area in areas) {
+  predictors[[area]]  <- rast(paste0("./analysis/data/raw_data/covariates/",area,"_covariates.tif"))   
+}
+
+Aridity_index <- list()
+levels <- c(15, 24, 30, 35, 40, 50, 60, 187)
+labels <- c(
+  "Not class \n(I < 15)",
+  "Semi-arid \n(15 ≤ I ≤ 24)",
+  "Moderately-arid \n(24 ≤ I ≤ 30)",
+  "Slightly-arid \n(30 ≤ I ≤ 35)",
+  "Moderately-humid \n(35 ≤ I ≤ 40)",
+  "Humid \n(40 ≤ I ≤ 50)",
+  "Very-humid \n(50 ≤ I ≤ 60)",
+  "Excessively-humid \n(60 ≤ I ≤ 187)"
+)
+
+for (area in areas) {
+  for (era in eras) {
+    r <- rast(c(paste0("./analysis/data/raw_data/covariates_raw/CHELSA_PAST/",era,"/",area,"_bio01.tif"),
+                paste0("./analysis/data/raw_data/covariates_raw/CHELSA_PAST/",era,"/",area,"_bio12.tif")))
+    
+    r <- project(r, projections[[area]], method = "bilinear")
+    r <- crop(r, predictors[[area]]$DEM)
+    Aridity_index[[area]][[era]] <- resample(r, predictors[[area]]$DEM)
+    names(Aridity_index[[area]][[era]]) <- c("Ta", "P")
+    Aridity_index[[area]][[era]]$IDM <- Aridity_index[[area]][[era]]$P / (Aridity_index[[area]][[era]]$Ta + 10)
+    
+    IM_values <- values(Aridity_index[[area]][[era]]$IDM)
+    Aridity_index[[area]][[era]]$IMartone <- cut(IM_values, breaks = c(-Inf, levels), labels = labels, right = FALSE)
+  }
+}
+
+df_list <- list()
+
+for(region in names(Aridity_index)) {
+  for(period in names(Aridity_index[[region]])) {
+    r <- Aridity_index[[region]][[period]]$IMartone
+    
+    temp_df <- as.data.frame(r, xy = TRUE) %>%
+      rename(IMartone = 3) %>%
+      mutate(
+        Region = region,
+        Period = period
+      )
+    
+    df_list[[paste(region, period, sep = "_")]] <- temp_df
+  }
+}
+
+all_df <- bind_rows(df_list)
+
+plot_list <- list()
+
+all_classes <- sort(unique(all_df$IMartone))
+n_classes <- length(all_classes)
+
+color_palette <- brewer.pal(min(n_classes,9), "YlGnBu")
+names(color_palette) <- all_classes
+
+for(r in unique(all_df$Region)) {
+  for(p in unique(all_df$Period)) {
+    temp <- all_df %>% filter(Region == r, Period == p)
+    
+    p_plot <- ggplot(temp, aes(x = x, y = y, fill = IMartone)) +
+      geom_raster() +
+      scale_fill_manual(values = color_palette, drop = FALSE, na.value = "transparent") +
+      coord_equal() +
+      labs(title = paste(r, "-", p), fill = "Aridity") +
+      theme_minimal()
+    
+    plot_list[[paste(r,p,sep="_")]] <- p_plot
+  }
+}
+
+gg1 <- (plot_list[[1]] | plot_list[[2]]) / (plot_list[[3]] | plot_list[[4]]) 
+gg2 <- (plot_list[[5]] | plot_list[[6]]) / (plot_list[[7]] | plot_list[[8]])     
+
+ggsave(filename = "./analysis/data/derived_data/pre_process/Aridity_01.pdf", plot = gg1, width = 10, height = 10)
+ggsave(filename = "./analysis/data/derived_data/pre_process/Aridity_02.pdf", plot = gg2, width = 10, height = 10)
+
+```
+
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
