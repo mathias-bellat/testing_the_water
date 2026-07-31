@@ -2,7 +2,7 @@
 .RData
 .Rproj.user
 renv/library/
-analysis/supplementary-materials/
+analysis/supplementary-materials-hiden/
 analysis/data/
 
 # Output
