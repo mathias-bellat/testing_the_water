@@ -1,0 +1,8 @@
+services:
+  r-app:
+    build: .
+    volumes:
+      - ./data:/app/data       # données en entrée
+      - ./output:/app/output   # résultats en sortie
+    environment:
+      - TZ=Europe/Paris

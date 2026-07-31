@@ -1,0 +1,14 @@
+.Rhistory
+.RData
+.Rproj.user
+renv/library/
+analysis/supplementary-materials/
+analysis/data/
+
+# Output
+output/*
+!output/.gitkeep
+
+# Data sensibles
+data/*
+!data/.gitkeep

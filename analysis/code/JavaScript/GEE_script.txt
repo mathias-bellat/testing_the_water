@@ -1,0 +1,207 @@
+// JavaScript code to be implemented in Google Earth Engine(c) developed by M. Bellat to
+// accompany the paper:
+
+// Bellat, M. and Soriano-Elias, B. 2026. 'Testing the water: Importance of surface water resources for settlement installation in
+//  various climatic contexts toward a machine learning approach'
+// submitted to Quaternary Environements and Humans.
+
+// and the collection of data: https://doi.org/10.17605/OSF.IO/CTW2U
+//
+//                ------------- ooo -------------
+
+// TO EXECUTE THE ALGORITHM PASTE THIS CODE INTO GOOGLE EARTH ENGINE CODE EDITOR AND PRESS 'Run'
+
+//                ------------- ooo -------------
+
+// For more information on how this code works and how to apply it refer to the text of the article and
+// the supplementary material on https://doi.org/10.17605/OSF.IO/CTW2U
+// Suggestions and code improvements are welcome. Please, contact M. Bellat at mathias.archaeology@gmail.com
+
+////////////////////////////////////////////////////////////////////////////
+//                ------------- ooo -------------
+////////////////////////////////////////////////////////////////////////////
+//
+// You have to replace the name of the study area by the corresponding name (Rhine; Lazio; Shephelah; Kurdistan)
+//
+//                ------------- ooo -------------
+
+// Import the AOI of each area, you have to change the name of the area each time
+var raster = ee.Image('projects/ee-mathiasbellat/assets/Rhine_AOI');
+
+// Read the first band and mask the rest
+var band = raster.select(0);
+var mask = band.gt(0);
+var maskedBand = band.updateMask(mask).toInt();
+
+// Vectorised the raster extend
+var vectors = maskedBand.reduceToVectors({
+  geometry: raster.geometry(),
+  crs: raster.projection(),
+  scale: raster.projection().nominalScale(),
+  geometryType: 'polygon',
+  eightConnected: false,
+  labelProperty: 'value',
+  maxPixels: 1e10
+});
+
+var aoi = vectors.geometry().dissolve({maxError: 1});
+
+// Show the studied area
+Map.centerObject(aoi, 8);
+Map.addLayer(aoi, {color: 'blue'}, 'AOI');
+print('AOI:', aoi);
+
+// Compute the Sentinel-2 cloud mask function and NDVI and NDWI indices
+
+// Cloud mask
+function maskS2clouds(image) {
+  var qa = image.select('QA60');
+  var cloudBitMask = 1 << 10;
+  var cirrusBitMask = 1 << 11;
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+               .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
+  return image.updateMask(mask).divide(10000);
+}
+
+// Sentinel-2 collection
+var dataset = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filterDate('2022-01-01', '2025-01-31')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) // Cloud percentage below 20%
+  .map(maskS2clouds);
+
+// Median composition
+var composite = dataset.median().clip(aoi);
+
+// Indices
+var ndwi = composite.normalizedDifference(['B3', 'B8']).rename('NDWI');
+
+var lswi1 = composite.normalizedDifference(['B3', 'B11']).rename('LSWI_1');
+
+var lswi2 = composite.normalizedDifference(['B3', 'B12']).rename('LSWI_2');
+
+var tctw = composite.expression(
+  '0.2578 * BLUE + 0.2305 * GREEN + 0.0883 * RED + 0.1071 * NIR - 0.7611 * SWIR1 - 0.5308 * SWIR2',
+  {
+    'BLUE':  composite.select('B2'),
+    'GREEN': composite.select('B3'),
+    'RED':   composite.select('B4'),
+    'NIR':   composite.select('B8'),
+    'SWIR1': composite.select('B11'),
+    'SWIR2': composite.select('B12')
+  }
+).rename('TCTW');
+
+// Compute the Aridity using the Global Aridity and PET Database
+
+// Aridity Index
+var ai = ee.Image('projects/sat-io/open-datasets/global_ai/global_ai_yearly').clip(aoi);
+var aridity = ai.select('b1').multiply(0.0001);
+
+// Min/max
+var stats = aridity.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: aoi,
+  scale: 1000,
+  bestEffort: true
+});
+
+var minValue = stats.get('b1_min').getInfo();
+var maxValue = stats.get('b1_max').getInfo();
+
+print('Min:', minValue, 'Max:', maxValue);
+
+// DEM
+var dem = ee.ImageCollection('COPERNICUS/DEM/GLO30')
+  .select('DEM')
+  .mosaic()
+  .clip(aoi);
+
+// Export the data to GoogleDrive
+
+// DEM
+Export.image.toDrive({
+  image: dem,
+  description: 'DEM',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_DEM_raw',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// Aridity
+Export.image.toDrive({
+  image: aridity,
+  description: 'Aridity',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_aridity_raw',
+  scale: 800,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// NDWI
+Export.image.toDrive({
+  image: ndwi,
+  description: 'NDWI',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_NDWI',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// LSWI_1 (B3/B11)
+Export.image.toDrive({
+  image: lswi1,
+  description: 'LSWI_1',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_LSWI_1613',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// LSWI_2 (B3/B12)
+Export.image.toDrive({
+  image: lswi2,
+  description: 'LSWI_2',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_LSWI_2202',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// TCTW
+Export.image.toDrive({
+  image: tctw,
+  description: 'TCTW',
+  folder: 'GoogleEarthEngine_QHE',
+  fileNamePrefix: 'Rhine_Sentinel2_TCTW',
+  scale: 30,
+  region: aoi,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+
+// Colours paramters
+var ndwiVis    = {min: -1,         max: 1,          palette: ['brown', 'white', 'blue']};
+var demVis     = {min: 0,          max: 4000,        palette: ['blue', 'green', 'brown', 'white']};
+var aridityVis = {min: minValue,   max: maxValue,    palette: ['yellow', 'green', 'darkgreen']};
+
+Map.centerObject(aoi, 9);
+
+// Add maps
+Map.addLayer(composite.select(['B4', 'B3', 'B2']), {min: 0, max: 0.3}, 'Sentinel 2 Median');
+Map.addLayer(ndwi,     ndwiVis,    'NDWI');
+Map.addLayer(lswi1,    ndwiVis,    'LSWI 1');
+Map.addLayer(lswi2,    ndwiVis,    'LSWI 2');
+Map.addLayer(tctw,     ndwiVis,    'TCTW');
+Map.addLayer(dem,      demVis,     'DEM GLO30');
+Map.addLayer(aridity,  aridityVis, 'Aridity');

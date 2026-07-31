@@ -1,0 +1,191 @@
+---
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    css: report.css
+params:
+  model: model
+  type: type
+  folder: folder
+  plot_folder: plot_folder
+  test: test
+  response_curves: false
+  only_presence: false
+  jk: false
+  env: null
+  clamp: true
+  permut: 10
+  verbose: true
+title: "`r class(params$model@models[[1]])` model for *`r params$model@data@species`*"
+---
+
+```{r setup, echo=F, message=FALSE}
+options(crayon.enabled = TRUE)
+```
+
+**`r class(params$model@models[[1]])`** output produced using **SDMtune** version `r packageVersion("SDMtune")` (Vignali S. *et al.*, 2020).
+
+```{r save files, echo=FALSE, message=FALSE}
+if (params$verbose) {
+        cli::cli_text("\n")
+        cli::cli_progress_step("Save files")
+    }
+    saveRDS(params$model, file = file.path(params$folder, "model.Rds"))
+    swd2csv(params$model@data, file.path(params$folder, "train.csv"))
+    if (!is.null(params$test)) 
+        swd2csv(params$test, file.path(params$folder, "test.csv"))
+```
+
+# ROC curve
+
+```{r plot ROC, echo=FALSE, message=FALSE}
+    if (params$verbose)
+        cli::cli_progress_step("Plot ROC curve")
+    plot <- plotROC_kfold(params$model, test = params$test, show_folds = TRUE)
+    suppressMessages(ggplot2::ggsave(filename = "ROC_curve.png", 
+        plot = plot, device = "png", path = params$plot_folder))
+    path <- file.path(params$plot_folder, "ROC_curve.png")
+    element <- stringr::str_glue("\n    <a href='{path}'>\n      <img src='{path}' class='fig-centered'>\n    </a>\n  ")
+    htmltools::HTML(element)
+
+```
+
+# Thresholds
+
+```{r thresholds, echo=FALSE, message=FALSE}
+if (params$verbose) 
+        cli::cli_progress_step("Compute thresholds")
+
+ths <- list()
+for (i in 1:4) {
+  ths[[i]] <- SDMtune::thresholds(params$model@models[[i]], 
+        type = params$type, test = params$test)
+}
+
+id_col <- ths[[1]][, 1, drop = FALSE]
+
+numeric_matrices <- lapply(ths, function(df) {
+  as.matrix(df[, -1]) |> apply(2, as.numeric)
+})
+
+numeric_mean <- Reduce("+", numeric_matrices) / length(numeric_matrices)
+ths_mean <- data.frame(id_col, numeric_mean, check.names = FALSE)
+ths_PA <- ths_mean[3, 2]
+
+
+kableExtra::kable_styling(knitr::kable(ths_mean, digits = 20), 
+bootstrap_options = c("striped", "hover", "condensed", 
+"responsive"))
+
+```
+
+`r if(!params$response_curves) {"<!--"}`
+# Response curves {#response}
+
+### Marginal curves:
+
+```{r marginal response, message=FALSE, echo=FALSE, warning=FALSE, eval=params$response_curves}
+type <- "marginal"
+if (params$verbose) 
+        cli::cli_progress_step("Plot {type} response curves")
+    vars <- sort(colnames(params$model@data@data))
+    elements <- c()
+    for (var in vars) {
+        plot <- plotResponse(params$model, var, type = params$type, 
+            only_presence = params$only_presence, marginal = ifelse(type == 
+                "marginal", TRUE, FALSE), rug = TRUE, color = "#4bc0c0")
+        fname <- paste0(var, "_", type, ".png")
+        suppressMessages(ggplot2::ggsave(filename = fname, plot = plot, 
+            device = "png", path = params$plot_folder))
+        path <- file.path(params$plot_folder, fname)
+        element <- stringr::str_glue("\n      <a href='{path}'>\n        <figure title='{var}'>\n          <img src='{path}'>\n          <figcaption>{var}</figcaption>\n        </figure>\n      </a>\n    ")
+        elements <- c(elements, element)
+    }
+    elements <- paste(c(elements, "<p></p>"), collapse = "")
+    htmltools::HTML(elements)
+```
+
+### Univariate curves:
+
+```{r univariate response, message=FALSE, echo=FALSE, warning=FALSE, eval=params$response_curves}
+ type <- "univariate"
+if (params$verbose) 
+        cli::cli_progress_step("Plot {type} response curves")
+    vars <- sort(colnames(params$model@data@data))
+    elements <- c()
+    for (var in vars) {
+        plot <- plotResponse(params$model, var, type = params$type, 
+            only_presence = params$only_presence, marginal = ifelse(type == 
+                "marginal", TRUE, FALSE), rug = TRUE, color = "#4bc0c0")
+        fname <- paste0(var, "_", type, ".png")
+        suppressMessages(ggplot2::ggsave(filename = fname, plot = plot, 
+            device = "png", path = params$plot_folder))
+        path <- file.path(params$plot_folder, fname)
+        element <- stringr::str_glue("\n      <a href='{path}'>\n        <figure title='{var}'>\n          <img src='{path}'>\n          <figcaption>{var}</figcaption>\n        </figure>\n      </a>\n    ")
+        elements <- c(elements, element)
+    }
+    elements <- paste(c(elements, "<p></p>"), collapse = "")
+    htmltools::HTML(elements)
+```
+
+`r if(!params$response_curves) {"-->"}`
+
+`r if(is.null(params$env)) {"<!--"}`
+# Distribution map
+
+```{r prediction, echo=FALSE, message=FALSE, eval=!is.null(env)}
+#.make_report_prediction(params)
+ if (params$verbose) 
+        cli::cli_progress_step("Predict distribution map")
+    pred <- predict(params$model, data = params$env, type = params$type, fun = c("mean", "sd", "max", "min", "median"), filename = file.path(params$plot_folder, "map.tif"), overwrite = TRUE, clamp = params$clamp, format = "GTiff")
+      plot <- plotPred(pred$mean, lt = params$type, hr = TRUE, colorramp = c("#2c7bb6", 
+        "#abd9e9", "#ffffbf", "#fdae61", "#d7191c"))
+    suppressMessages(ggplot2::ggsave(filename = "map_mean.png", plot = plot, 
+        device = "png", path = params$plot_folder))
+    path <- file.path(params$plot_folder, "map_mean.png")
+    element <- stringr::str_glue("\n    <a href='{path}'>\n      <img src='{path}' class='fig-centered'>\n    </a>\n  ")
+    htmltools::HTML(element)
+```
+
+
+# SD map
+
+```{r prediction SD, echo=FALSE, message=FALSE, eval=!is.null(env)}
+ if (params$verbose) 
+        cli::cli_progress_step("Predict SD distribution map")
+    plot <- plotPred(pred$sd, lt = params$type, hr = TRUE, colorramp = c("#2c7bb6", 
+        "#abd9e9", "#ffffbf", "#fdae61", "#d7191c"))
+    suppressMessages(ggplot2::ggsave(filename = "map_sd.png", plot = plot, 
+        device = "png", path = params$plot_folder))
+    path <- file.path(params$plot_folder, "map_sd.png")
+    element <- stringr::str_glue("\n    <a href='{path}'>\n      <img src='{path}' class='fig-centered'>\n    </a>\n  ")
+    htmltools::HTML(element)
+```
+
+
+`r if(is.null(params$env)) {"-->"}`
+
+# Variable importance
+
+```{r variable importance, echo=FALSE, message=FALSE}
+if (params$verbose) 
+        cli::cli_progress_step("Compute variable importance")
+    kableExtra::kable_styling(knitr::kable(varImp(params$model, 
+        params$permut, progress = FALSE)), bootstrap_options = c("striped", 
+        "hover", "condensed", "responsive"), full_width = FALSE)
+```
+
+`r if(!params$jk) {"<!--"}`
+# Jackknife test
+
+```{r, echo=FALSE, message=FALSE, eval=params$jk}
+.compute_report_jk(params, test)
+```
+
+`r if(!params$jk) {"-->"}`
+
+# References
+
+- Vignali, S., Barras, A. G., Arlettaz, R., Braunisch, V. (2020). *SDMtune*: An R package to tune and evaluate species distribution models. Ecology and Evolution, **10**(20), 11488–11506. <https://doi.org/10.1002/ece3.6786>
+- Vignali, S., Barras, A. G., Braunisch, V. (`r format(packageDate("SDMtune"), format = "%Y")`). *SDMtune*: Species Distribution Model Selection. R package version `r packageVersion("SDMtune")`. `r ifelse(grepl("9000",packageVersion("SDMtune")), "<https://github.com/ConsBiol-unibern/SDMtune>", "<https://CRAN.R-project.org/package=SDMtune>")`

@@ -11,20 +11,18 @@ MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.or
 
 This repository contains the data and code for our paper:
 
-> Bellat, Soriano-Elias (2026). *Testing the water: Importance of
-> surface water resources for settlement installation in various
-> climatic contexts toward a machine learning approach*. OSF
-> <https://doi.org/10.17605/OSF.IO/CTW2U>
+> XXX (2026). *Testing the water: Importance of surface water resources
+> for settlement installation in various climatic contexts toward a
+> machine learning approach*. OSF <https://doi.org/XXX>
 
-### How to cite
+### How to cites
 
 Please cite this compendium as:
 
-> Bellat, Soriano-Elias (2026). *Compendium of R code and data for
-> Testing the water: Importance of surface water resources for
-> settlement installation in various climatic contexts toward a machine
-> learning approach*. Accessed 18 juin 2026. Online at
-> <https://doi.org/10.17605/OSF.IO/CTW2U>
+> XX (2026). *Compendium of R code and data for Testing the water:
+> Importance of surface water resources for settlement installation in
+> various climatic contexts toward a machine learning approach*.
+> Accessed 18 juin 2026. Online at
 
 ## Contents
 
@@ -44,9 +42,12 @@ The **analysis** directory contains:
 
 This research compendium has been developed using the statistical
 programming language R. To work with the compendium, you will need
-installed on your computer the [R
-software](https://cloud.r-project.org/) itself and optionally [RStudio
-Desktop](https://rstudio.com/products/rstudio/download/).
+installed on your computer the
+[Docker](https://docs.docker.com/get-docker/) and [Docker
+Compose](https://docs.docker.com/compose/install/).
+
+[R software](https://cloud.r-project.org/) itself and optionally
+[RStudio Desktop](https://rstudio.com/products/rstudio/download/).
 
 You can download the compendium as a zip from from this URL:
 [master.zip](./archive/master.zip). After unzipping: - built the docker
